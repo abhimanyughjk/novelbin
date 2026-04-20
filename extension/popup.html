@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>NovelBin Extractor</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+    :root {
+      --bg:       #0b0c10;
+      --surface:  #12141a;
+      --surface2: #1a1d27;
+      --surface3: #202330;
+      --border:   #1e2235;
+      --accent:   #00e5ff;
+      --accent2:  #7c3aed;
+      --accent3:  #ff3cac;
+      --success:  #00f5a0;
+      --error:    #ff4560;
+      --warn:     #ffb300;
+      --text:     #cdd6f4;
+      --muted:    #6b7394;
+      --bookmark: #f59e0b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 440px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 14px;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px 10px;
+      display: flex; align-items: center; gap: 11px;
+      position: relative; overflow: hidden;
+    }
+    .header::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(0,229,255,0.04), transparent 60%);
+      pointer-events: none;
+    }
+    .logo-mark {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 16px; font-weight: 700; color: #000; flex-shrink: 0;
+      box-shadow: 0 0 12px rgba(0,229,255,0.35);
+    }
+    .header-text h1 { font-size: 14px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #fff; }
+    .header-text p  { font-size: 10px; color: var(--muted); font-family: 'Share Tech Mono', monospace; }
+    .version-badge {
+      margin-left: auto; font-family: 'Share Tech Mono', monospace; font-size: 10px;
+      color: var(--accent); background: rgba(0,229,255,0.08);
+      border: 1px solid rgba(0,229,255,0.2); border-radius: 4px; padding: 2px 7px; letter-spacing: 1px; white-space: nowrap;
+    }
+    .scanline { height: 2px; background: linear-gradient(90deg, transparent, var(--accent) 30%, var(--accent2) 70%, transparent); opacity: 0.5; }
+
+    /* ── Nav tabs ── */
+    .nav-tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; border-bottom: 1px solid var(--border); }
+    .nav-tab {
+      padding: 9px 6px; background: var(--surface); border: none; color: var(--muted);
+      font-family: 'Rajdhani', sans-serif; font-size: 12px; font-weight: 600;
+      letter-spacing: 0.8px; text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      border-right: 1px solid var(--border);
+    }
+    .nav-tab:last-child { border-right: none; }
+    .nav-tab.active { background: rgba(0,229,255,0.07); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+    .nav-tab:hover:not(.active) { background: rgba(255,255,255,0.03); color: var(--text); }
+
+    /* ── Panels ── */
+    .panel { display: none; padding: 13px 16px; flex-direction: column; gap: 11px; }
+    .panel.active { display: flex; }
+
+    /* ── Chapter info ── */
+    .chapter-info {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-left: 3px solid var(--accent2); border-radius: 6px;
+      padding: 9px 12px; min-height: 34px; display: flex; align-items: center; gap: 8px;
+    }
+    .ci-label { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--accent2); letter-spacing: 1px; text-transform: uppercase; flex-shrink: 0; }
+    #chapterTitle { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.3; font-style: italic; }
+    #chapterTitle:empty::before { content: 'No chapter extracted yet'; color: var(--muted); font-style: normal; font-weight: 400; }
+
+    /* ── Buttons ── */
+    .primary-btn {
+      width: 100%; padding: 11px;
+      background: linear-gradient(135deg, rgba(0,229,255,0.1), rgba(124,58,237,0.1));
+      border: 1px solid var(--accent); border-radius: 8px; color: var(--accent);
+      font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+    }
+    .primary-btn:hover:not(:disabled) { box-shadow: 0 0 12px rgba(0,229,255,0.35); color: #fff; transform: translateY(-1px); }
+    .primary-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+    .bulk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .bulk-btn {
+      padding: 11px 10px; border-radius: 8px;
+      font-family: 'Rajdhani', sans-serif; font-size: 13px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+      border: 1px solid; display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .bulk-btn.start { background: rgba(255,179,0,0.08); border-color: var(--warn); color: var(--warn); }
+    .bulk-btn.start:hover:not(:disabled) { background: rgba(255,179,0,0.16); box-shadow: 0 0 12px rgba(255,179,0,0.25); }
+    .bulk-btn.stop  { background: rgba(255,69,96,0.08); border-color: var(--error); color: var(--error); }
+    .bulk-btn.stop:hover:not(:disabled)  { background: rgba(255,69,96,0.16); box-shadow: 0 0 12px rgba(255,69,96,0.25); }
+    .bulk-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .action-btn { padding: 9px; border-radius: 7px; font-family: 'Rajdhani', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: all 0.2s; border: 1px solid; }
+    .action-btn.copy  { background: rgba(0,245,160,0.08); border-color: var(--success); color: var(--success); }
+    .action-btn.copy:hover:not(:disabled)  { background: rgba(0,245,160,0.16); box-shadow: 0 0 10px rgba(0,245,160,0.2); }
+    .action-btn.clear { background: rgba(255,69,96,0.08); border-color: var(--error); color: var(--error); }
+    .action-btn.clear:hover:not(:disabled) { background: rgba(255,69,96,0.16); box-shadow: 0 0 10px rgba(255,69,96,0.2); }
+    .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* ── Progress ── */
+    .progress-wrap { display: none; flex-direction: column; gap: 6px; }
+    .progress-wrap.show { display: flex; }
+    .progress-top { display: flex; justify-content: space-between; align-items: center; }
+    .progress-label  { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--warn); }
+    .chapter-counter { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--accent2); }
+    .progress-bar-track { height: 4px; background: var(--surface2); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+    .progress-bar-fill { height: 100%; border-radius: 4px; width: 30%; background-image: linear-gradient(90deg, var(--accent2) 0%, var(--accent) 50%, var(--accent2) 100%); background-size: 200% 100%; animation: shimmer 1.5s linear infinite; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .progress-current { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ── BG indicator ── */
+    .bg-indicator { display: flex; align-items: center; gap: 9px; background: rgba(255,179,0,0.07); border: 1px solid rgba(255,179,0,0.25); border-radius: 8px; padding: 9px 12px; }
+    .bg-pulse { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: var(--warn); box-shadow: 0 0 8px var(--warn); animation: bgpulse 1.2s ease-in-out infinite; }
+    @keyframes bgpulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.75); } }
+    .bg-text  { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--warn); letter-spacing: 0.5px; flex: 1; }
+    .bg-hint  { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); white-space: nowrap; }
+
+    /* ── Loader ── */
+    #loader { display: none; align-items: center; justify-content: center; gap: 10px; padding: 2px 0; }
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(0,229,255,0.15); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-text { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--accent); letter-spacing: 1.5px; animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+    /* ── Status ── */
+    .status { display: none; padding: 7px 12px; border-radius: 6px; font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 0.5px; border-left: 3px solid; }
+    .status.success { background: rgba(0,245,160,0.08); border-color: var(--success); color: var(--success); }
+    .status.error   { background: rgba(255,69,96,0.08);  border-color: var(--error);   color: var(--error); }
+    .status.info    { background: rgba(0,229,255,0.08);  border-color: var(--accent);  color: var(--accent); }
+    .status.warn    { background: rgba(255,179,0,0.08);  border-color: var(--warn);    color: var(--warn); }
+
+    /* ── Output textarea ── */
+    .output-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .output-label { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+    .stats { display: flex; gap: 8px; }
+    .stat { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--accent2); background: rgba(124,58,237,0.1); border: 1px solid rgba(124,58,237,0.2); border-radius: 3px; padding: 1px 6px; }
+    textarea.main-out {
+      width: 100%; height: 185px;
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-family: 'Share Tech Mono', monospace; font-size: 11.5px;
+      line-height: 1.7; padding: 11px; resize: none; outline: none; transition: border-color 0.2s;
+    }
+    textarea.main-out:focus { border-color: rgba(0,229,255,0.3); }
+    textarea.main-out::placeholder { color: var(--muted); font-style: italic; }
+
+    /* ════════════════════════════════════════════
+       HISTORY PANEL
+    ════════════════════════════════════════════ */
+    .hist-header { display: flex; align-items: center; justify-content: space-between; }
+    .hist-header-left { display: flex; align-items: center; gap: 8px; }
+    .hist-title { font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text); }
+    .hist-count { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--accent2); background: rgba(124,58,237,0.15); border: 1px solid rgba(124,58,237,0.3); border-radius: 10px; padding: 1px 8px; }
+    .hist-clear-all { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--error); background: rgba(255,69,96,0.08); border: 1px solid rgba(255,69,96,0.25); border-radius: 4px; padding: 3px 9px; cursor: pointer; transition: all 0.2s; }
+    .hist-clear-all:hover { background: rgba(255,69,96,0.18); }
+
+    /* Sub-tabs inside history panel */
+    .hist-sub-tabs { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+    .hist-sub-tab {
+      padding: 7px 10px; background: var(--surface2); border: none; color: var(--muted);
+      font-family: 'Rajdhani', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.8px;
+      text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .hist-sub-tab:first-child { border-right: 1px solid var(--border); }
+    .hist-sub-tab.active { background: rgba(0,229,255,0.07); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+    .hist-sub-tab:hover:not(.active) { background: rgba(255,255,255,0.03); color: var(--text); }
+
+    /* History list scrollable area */
+    .hist-list {
+      display: flex; flex-direction: column; gap: 8px;
+      max-height: 330px; overflow-y: auto; padding-right: 3px;
+    }
+    .hist-list::-webkit-scrollbar { width: 4px; }
+    .hist-list::-webkit-scrollbar-track { background: var(--surface2); border-radius: 4px; }
+    .hist-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .hist-list::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* History card — extracts */
+    .hc {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 12px; transition: border-color 0.2s, background 0.2s;
+      position: relative; overflow: hidden;
+    }
+    .hc::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, var(--accent2), var(--accent)); border-radius: 8px 0 0 8px; }
+    .hc:hover { border-color: rgba(0,229,255,0.2); background: var(--surface3); }
+    .hc:hover .hc-actions { opacity: 1; }
+
+    /* Bookmark card accent is amber */
+    .hc.bm-card::before { background: linear-gradient(180deg, var(--bookmark), #f97316); }
+    .hc.bm-card:hover { border-color: rgba(245,158,11,0.3); }
+
+    .hc-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+    .hc-title { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.4; flex: 1; }
+    .hc-ts    { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+
+    .hc-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+    .hc-badge { font-family: 'Share Tech Mono', monospace; font-size: 10px; border-radius: 3px; padding: 1px 7px; }
+    .hc-badge.single  { background: rgba(0,229,255,0.08);  border: 1px solid rgba(0,229,255,0.2);  color: var(--accent); }
+    .hc-badge.bulk    { background: rgba(255,179,0,0.08);  border: 1px solid rgba(255,179,0,0.2);  color: var(--warn); }
+    .hc-badge.words   { background: rgba(124,58,237,0.08); border: 1px solid rgba(124,58,237,0.2); color: var(--accent2); }
+    .hc-badge.range   { background: rgba(0,245,160,0.06);  border: 1px solid rgba(0,245,160,0.2);  color: var(--success); }
+    .hc-badge.bm      { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); color: var(--bookmark); }
+    .hc-badge.auto    { background: rgba(0,229,255,0.05);  border: 1px solid rgba(0,229,255,0.15); color: var(--muted); }
+
+    /* Bookmark update detail row */
+    .bm-detail { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); line-height: 1.6; margin-bottom: 7px; }
+    .bm-arrow { color: var(--bookmark); margin: 0 5px; }
+
+    .hc-actions { display: flex; gap: 6px; opacity: 0; transition: opacity 0.2s; }
+    .hc-btn {
+      flex: 1; padding: 5px 8px; border-radius: 5px; border: 1px solid;
+      font-family: 'Rajdhani', sans-serif; font-size: 11px; font-weight: 600;
+      letter-spacing: 0.8px; text-transform: uppercase; cursor: pointer; transition: all 0.15s;
+    }
+    .hc-btn.load   { background: rgba(0,229,255,0.07);  border-color: var(--accent);   color: var(--accent); }
+    .hc-btn.load:hover   { background: rgba(0,229,255,0.16); }
+    .hc-btn.recopy { background: rgba(0,245,160,0.07);  border-color: var(--success);  color: var(--success); }
+    .hc-btn.recopy:hover { background: rgba(0,245,160,0.16); }
+    .hc-btn.del    { background: rgba(255,69,96,0.07);  border-color: var(--error);    color: var(--error); }
+    .hc-btn.del:hover    { background: rgba(255,69,96,0.16); }
+
+    .hist-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 0; gap: 10px; color: var(--muted); }
+    .hist-empty .icon { font-size: 32px; opacity: 0.3; }
+    .hist-empty .msg  { font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 1px; text-align: center; }
+
+    /* ── Footer ── */
+    .footer { padding: 7px 16px 10px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); }
+    .footer-text { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent3); box-shadow: 0 0 6px var(--accent3); animation: blink 2s ease-in-out infinite; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-mark">N</div>
+    <div class="header-text">
+      <h1>NovelBin Extractor</h1>
+      <p>novelbin.com // chapter ripper v5</p>
+    </div>
+    <span class="version-badge">v5.0</span>
+  </div>
+  <div class="scanline"></div>
+
+  <!-- Top nav -->
+  <div class="nav-tabs">
+    <button class="nav-tab active" id="tabSingle" >📄 Current</button>
+    <button class="nav-tab"        id="tabBulk"   >📚 Till Latest</button>
+    <button class="nav-tab"        id="tabHistory">🕘 History</button>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SINGLE CHAPTER PANEL
+  ══════════════════════════════════════ -->
+  <div class="panel active" id="panelSingle">
+
+    <div class="chapter-info">
+      <span class="ci-label">Chapter</span>
+      <span id="chapterTitle"></span>
+    </div>
+
+    <button class="primary-btn" id="extractBtn">⚡ Extract This Chapter</button>
+
+    <div id="loader">
+      <div class="spinner"></div>
+      <span class="loader-text">EXTRACTING...</span>
+    </div>
+
+    <div id="statusSingle" class="status"></div>
+
+    <div>
+      <div class="output-header">
+        <span class="output-label">Extracted Text</span>
+        <div class="stats">
+          <span class="stat" id="wordCount">0 words</span>
+          <span class="stat" id="charCount">0 chars</span>
+        </div>
+      </div>
+      <textarea id="output" class="main-out" readonly placeholder="Chapter text will appear here…"></textarea>
+    </div>
+
+    <div class="actions">
+      <button class="action-btn copy"  id="copyBtn"  disabled>📋 Copy</button>
+      <button class="action-btn clear" id="clearBtn" disabled>🗑 Clear</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       BULK PANEL
+  ══════════════════════════════════════ -->
+  <div class="panel" id="panelBulk">
+
+    <div class="chapter-info">
+      <span class="ci-label">Progress</span>
+      <span id="bulkChapterTitle" style="font-size:12px;font-weight:600;color:var(--text);font-style:italic;">Ready to start</span>
+    </div>
+
+    <!-- BG indicator -->
+    <div id="bgIndicator" style="display:none;" class="bg-indicator">
+      <div class="bg-pulse"></div>
+      <span id="bgIndicatorText" class="bg-text">Scraping in background…</span>
+      <span class="bg-hint">You can switch tabs</span>
+    </div>
+
+    <div class="bulk-grid">
+      <button class="bulk-btn start" id="bulkStartBtn">🚀 Start Bulk</button>
+      <button class="bulk-btn stop"  id="bulkStopBtn" disabled>⏹ Stop</button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-top">
+        <span class="progress-label"  id="progressLabel">SCRAPING...</span>
+        <span class="chapter-counter" id="chapterCounter">0 chapters</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill"></div>
+      </div>
+      <div class="progress-current" id="progressCurrent">Starting…</div>
+    </div>
+
+    <div id="statusBulk" class="status"></div>
+
+    <div>
+      <div class="output-header">
+        <span class="output-label">Collected Text</span>
+        <div class="stats">
+          <span class="stat" id="bulkWordCount">0 words</span>
+          <span class="stat" id="bulkCharCount">0 chars</span>
+        </div>
+      </div>
+      <textarea id="bulkOutput" class="main-out" readonly placeholder="Chapters accumulate here as they are scraped…"></textarea>
+    </div>
+
+    <div class="actions">
+      <button class="action-btn copy"  id="bulkCopyBtn"  disabled>📋 Copy</button>
+      <button class="action-btn clear" id="bulkClearBtn" disabled>🗑 Clear</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       HISTORY PANEL
+  ══════════════════════════════════════ -->
+  <div class="panel" id="panelHistory">
+
+    <div class="hist-header">
+      <div class="hist-header-left">
+        <span class="hist-title">History</span>
+        <span class="hist-count" id="histCountBadge">0</span>
+      </div>
+      <button class="hist-clear-all" id="histClearAll">Clear All</button>
+    </div>
+
+    <!-- Sub-tabs -->
+    <div class="hist-sub-tabs">
+      <button class="hist-sub-tab active" id="subTabExtracts">📄 Extracts</button>
+      <button class="hist-sub-tab"        id="subTabBookmarks">🔖 Bookmark Updates</button>
+    </div>
+
+    <!-- Extracts list -->
+    <div id="extractsList" class="hist-list"></div>
+
+    <!-- Bookmark log list -->
+    <div id="bookmarksList" class="hist-list" style="display:none;"></div>
+
+    <div id="statusHistory" class="status"></div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span class="footer-text">Open a NovelBin chapter page first</span>
+    <div class="dot"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

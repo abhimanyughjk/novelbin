@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VOXEN — Text to Speech</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ═══ VARIABLES ══════════════════════════════════════ */
+    :root {
+      --bg:       #080810;
+      --surface:  #0e0e1a;
+      --surface2: #13131f;
+      --border:   rgba(0,210,255,0.12);
+      --accent:   #00d2ff;
+      --accent2:  #0077ff;
+      --glow:     rgba(0,210,255,0.35);
+      --text:     #e8eaf6;
+      --muted:    #5a5d7a;
+      --hl-bg:    rgba(0,210,255,0.22);
+      --hl-text:  #00d2ff;
+      --ff:       'Syne', sans-serif;
+      --mono:     'DM Mono', monospace;
+      --r:        14px;
+      --ease:     0.2s cubic-bezier(0.4,0,0.2,1);
+      --hdr:      58px;   /* header height */
+      --bar:      64px;   /* sticky controls bar height */
+    }
+
+    /* ═══ RESET ══════════════════════════════════════════ */
+    *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden; /* no page scroll — panels scroll independently */
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--ff);
+    }
+
+    /* ═══ GRID BG ═════════════════════════════════════════ */
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 60% 40% at 15% 10%, rgba(0,119,255,.07) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 50% at 85% 90%, rgba(0,210,255,.06) 0%, transparent 55%),
+        repeating-linear-gradient(0deg,  transparent, transparent 39px, rgba(255,255,255,.012) 39px, rgba(255,255,255,.012) 40px),
+        repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,.012) 39px, rgba(255,255,255,.012) 40px);
+    }
+
+    /* ═══ APP SHELL ═══════════════════════════════════════ */
+    #app {
+      position: relative; z-index: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* ═══ HEADER ══════════════════════════════════════════ */
+    #header {
+      height: var(--hdr);
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(8,8,16,.9);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      z-index: 50;
+    }
+    .logo { display: flex; align-items: center; gap: 12px; }
+    .logo-icon {
+      width: 36px; height: 36px; border-radius: 9px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 18px var(--glow);
+    }
+    .logo-icon svg { width: 18px; height: 18px; fill: #fff; }
+    .logo-text {
+      font-size: 1.3rem; font-weight: 800; letter-spacing: .12em;
+      background: linear-gradient(90deg, var(--accent), #a0f4ff);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .status-badge {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 100px; padding: 5px 13px;
+      font-family: var(--mono); font-size: .7rem; color: var(--muted);
+      transition: var(--ease);
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--muted); transition: background .3s, box-shadow .3s;
+    }
+    .status-badge.playing .status-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pdot 1s infinite; }
+    .status-badge.playing { color: var(--accent); border-color: rgba(0,210,255,.3); }
+    .status-badge.paused  .status-dot { background: #ffae00; }
+    .status-badge.paused  { color: #ffae00; border-color: rgba(255,174,0,.3); }
+    @keyframes pdot { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ═══ THREE-PANEL WORKSPACE ═══════════════════════════ */
+    #workspace {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      /* calc out header + sticky bar */
+      height: calc(100vh - var(--hdr) - var(--bar));
+    }
+
+    /* individual panels */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      min-height: 0; /* critical: prevents flex children from overflowing */
+    }
+    #panel-controls  { width: 240px; min-width: 160px; max-width: 420px; flex-shrink: 0; border-right: 1px solid var(--border); }
+    #panel-playback  { flex: 1; min-width: 200px; min-height: 0; }
+    #panel-settings  { width: 260px; min-width: 180px; max-width: 440px; flex-shrink: 0; border-left: 1px solid var(--border); }
+
+    .panel-header {
+      flex-shrink: 0;
+      padding: 12px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(13,13,26,.6);
+      font-family: var(--mono); font-size: .63rem; font-weight: 600;
+      letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 16px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0,210,255,.18) transparent;
+    }
+    .panel-body::-webkit-scrollbar { width: 4px; }
+    .panel-body::-webkit-scrollbar-thumb { background: rgba(0,210,255,.2); border-radius: 4px; }
+
+    /* ═══ RESIZE HANDLE ════════════════════════════════════ */
+    .resize-handle {
+      width: 5px;
+      flex-shrink: 0;
+      cursor: col-resize;
+      background: transparent;
+      position: relative;
+      z-index: 10;
+      transition: background .15s;
+    }
+    .resize-handle::after {
+      content: '';
+      position: absolute; top: 0; bottom: 0;
+      left: 50%; transform: translateX(-50%);
+      width: 1px;
+      background: var(--border);
+      transition: background .15s, width .15s;
+    }
+    .resize-handle:hover::after,
+    .resize-handle.dragging::after {
+      background: var(--accent);
+      width: 2px;
+      box-shadow: 0 0 8px var(--glow);
+    }
+
+    /* ═══ INPUT SECTION (panel-controls top) ══════════════ */
+    #input-area {
+      width: 100%; min-height: 160px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--r); padding: .9rem 1rem;
+      color: var(--text); font-family: var(--ff); font-size: .9rem; line-height: 1.7;
+      resize: none; /* manual resize off — panel handles sizing */
+      outline: none; transition: border-color .2s, box-shadow .2s;
+      flex: 1;
+    }
+    #input-area::placeholder { color: var(--muted); }
+    #input-area:focus { border-color: rgba(0,210,255,.35); box-shadow: 0 0 0 3px rgba(0,210,255,.07); }
+
+    /* textarea grows to fill panel */
+    #panel-controls .panel-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .char-count { font-family: var(--mono); font-size: .62rem; color: var(--muted); text-align: right; }
+
+    /* ═══ LIVE PLAYBACK ════════════════════════════════════ */
+    #output-wrap {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0; /* prevent flex blowout */
+    }
+
+    /* The scroll container — we control scroll manually for centering */
+    #output-scroll {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      position: relative;
+      min-height: 0;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0,210,255,.18) transparent;
+      padding: 0; /* padding is on inner */
+    }
+    #output-scroll::-webkit-scrollbar { width: 4px; }
+    #output-scroll::-webkit-scrollbar-thumb { background: rgba(0,210,255,.2); border-radius: 4px; }
+
+    /* Inner text content — preserves whitespace / line breaks */
+    #output-display {
+      padding: 1.4rem 1.6rem;
+      font-size: 1.05rem;
+      line-height: 1.95;
+      color: var(--text);
+      word-break: break-word;
+      /* PRESERVE FORMATTING: white-space pre-wrap keeps newlines & spaces */
+      white-space: pre-wrap;
+      min-height: 100%;
+    }
+
+    /* "ghost" spacer above and below so active word can always centre */
+    #output-display::before,
+    #output-display::after {
+      content: '';
+      display: block;
+    }
+
+    /* word spans */
+    .word {
+      display: inline;
+      border-radius: 4px;
+      padding: 2px 3px;
+      margin: 0 1px;
+      transition: background .12s, color .12s, box-shadow .12s;
+      cursor: pointer;
+    }
+    .word:hover { background: rgba(0,210,255,.1); color: #c0f0ff; }
+    .word.active {
+      background: var(--hl-bg);
+      color: var(--hl-text);
+      box-shadow: 0 0 16px rgba(0,210,255,.3);
+    }
+    .word.spoken { color: var(--muted); }
+    .word.skip-flash { animation: skipflash .35s ease forwards; }
+    @keyframes skipflash {
+      0%   { background: rgba(0,210,255,.7); color: #fff; transform: scale(1.1); }
+      100% { background: var(--hl-bg); color: var(--hl-text); transform: scale(1); }
+    }
+
+    /* Centre-line: a faint horizontal guide at the middle of the scroll viewport */
+    #panel-playback {
+      position: relative;
+    }
+    #panel-playback::after {
+      content: '';
+      position: absolute;
+      /* sits at 50% of output-wrap height, below the panel-header */
+      top: calc(50% + 18px); /* ~half of panel-header height offset */
+      left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, rgba(0,210,255,.13) 20%, rgba(0,210,255,.13) 80%, transparent 100%);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* Top/bottom fade overlays so text fades as it scrolls away from centre */
+    #output-wrap::before,
+    #output-wrap::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 80px;
+      pointer-events: none;
+      z-index: 3;
+    }
+    #output-wrap::before {
+      top: 0;
+      background: linear-gradient(to bottom, var(--surface) 0%, transparent 100%);
+    }
+    #output-wrap::after {
+      bottom: 3px; /* above progress bar */
+      background: linear-gradient(to top, var(--surface) 0%, transparent 100%);
+    }
+
+    .dbl-hint {
+      position: absolute; top: 8px; right: 12px;
+      font-family: var(--mono); font-size: .6rem; color: var(--muted);
+      opacity: 0; pointer-events: none; user-select: none;
+      transition: opacity .3s;
+    }
+    #output-wrap:hover .dbl-hint { opacity: .7; }
+
+    .display-placeholder { color: var(--muted); font-style: italic; font-size: .9rem; }
+
+    /* Progress bar at bottom of playback panel */
+    .progress-wrap {
+      flex-shrink: 0;
+      height: 3px; background: var(--surface2); overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      transition: width .15s linear; box-shadow: 0 0 8px var(--glow);
+    }
+
+    /* ═══ SETTINGS PANEL ══════════════════════════════════ */
+    .setting-group {
+      margin-bottom: 1.4rem;
+    }
+    .setting-group:last-child { margin-bottom: 0; }
+    .setting-label {
+      font-family: var(--mono); font-size: .65rem; font-weight: 600;
+      letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+      margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .setting-val {
+      font-family: var(--mono); font-size: .72rem; color: var(--accent);
+      background: rgba(0,210,255,.08); padding: 2px 7px; border-radius: 5px;
+    }
+    input[type=range] {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: 4px; background: var(--surface2);
+      border-radius: 100px; outline: none; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 10px var(--glow);
+      transition: transform .15s, box-shadow .15s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); box-shadow: 0 0 18px var(--glow); }
+    input[type=range]::-moz-range-thumb { width: 15px; height: 15px; border: none; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--glow); cursor: pointer; }
+    .select-wrap { position: relative; }
+    select {
+      -webkit-appearance: none; appearance: none; width: 100%;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--r); color: var(--text);
+      font-family: var(--ff); font-size: .82rem;
+      padding: 8px 32px 8px 10px; outline: none; cursor: pointer;
+      transition: border-color .2s;
+    }
+    select:focus { border-color: rgba(0,210,255,.35); }
+    .select-arrow { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--muted); }
+
+    /* Keyboard hints inside settings panel */
+    .kbd-section { margin-top: 1.4rem; border-top: 1px solid var(--border); padding-top: 1.2rem; }
+    .kbd-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 7px; font-family: var(--mono); font-size: .65rem; color: var(--muted);
+    }
+    kbd {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 5px; padding: 1px 6px;
+      font-family: var(--mono); font-size: .63rem; color: var(--muted);
+    }
+
+    /* ═══ STICKY CONTROLS BAR ══════════════════════════════ */
+    #sticky-bar {
+      height: var(--bar);
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 1.2rem; gap: 8px;
+      background: rgba(8,8,16,.92);
+      backdrop-filter: blur(24px) saturate(1.6);
+      -webkit-backdrop-filter: blur(24px) saturate(1.6);
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -4px 30px rgba(0,0,0,.5);
+      z-index: 50;
+    }
+    .bar-divider { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
+
+    /* ═══ BUTTONS ═════════════════════════════════════════ */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      border: none; cursor: pointer; border-radius: 9px;
+      font-family: var(--ff); font-weight: 600; font-size: .82rem;
+      padding: 9px 16px; transition: var(--ease);
+      position: relative; overflow: hidden; white-space: nowrap;
+    }
+    .btn::after { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,.05); opacity: 0; transition: opacity .15s; }
+    .btn:hover::after { opacity: 1; }
+    .btn:active { transform: scale(.96); }
+    .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .btn:disabled { opacity: .3; cursor: not-allowed; pointer-events: none; }
+
+    .btn-primary { background: linear-gradient(135deg,var(--accent2),var(--accent)); color: #fff; box-shadow: 0 0 18px rgba(0,120,255,.3); }
+    .btn-primary:hover { box-shadow: 0 0 26px rgba(0,210,255,.45); }
+    .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover { border-color: rgba(0,210,255,.3); color: var(--accent); }
+    .btn-danger { background: rgba(255,60,80,.1); color: #ff5070; border: 1px solid rgba(255,60,80,.2); }
+    .btn-danger:hover { background: rgba(255,60,80,.18); }
+    .btn-skip { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); padding: 9px 12px; }
+    .btn-skip:hover { color: var(--accent); border-color: rgba(0,210,255,.3); }
+    .btn-skip svg { width: 13px; height: 13px; }
+
+    /* ═══ RESPONSIVE ═══════════════════════════════════════ */
+    @media (max-width: 700px) {
+      html, body { overflow: auto; }
+      #workspace { flex-direction: column; height: auto; overflow: visible; }
+      .panel { width: 100% !important; max-width: 100% !important; min-width: 0 !important; border: none !important; border-bottom: 1px solid var(--border) !important; }
+      #output-display { min-height: 300px; }
+      .resize-handle { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ══ HEADER ══════════════════════════════════════════ -->
+  <div id="header">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+      </div>
+      <span class="logo-text">VOXEN</span>
+    </div>
+    <div class="status-badge" id="status-badge">
+      <div class="status-dot"></div>
+      <span id="status-text">IDLE</span>
+    </div>
+  </div>
+
+  <!-- ══ WORKSPACE ═══════════════════════════════════════ -->
+  <div id="workspace">
+
+    <!-- LEFT: Controls + Input -->
+    <div class="panel" id="panel-controls">
+      <div class="panel-header">
+        <span>Input Text</span>
+        <span id="char-count" style="font-size:.6rem">0 · 0w</span>
+      </div>
+      <div class="panel-body">
+        <textarea id="input-area" placeholder="Paste or type your text here…&#10;&#10;Line breaks, paragraphs, and spacing will be preserved exactly in the Live Playback panel." spellcheck="false"></textarea>
+        <div class="char-count" id="char-detail"></div>
+      </div>
+    </div>
+
+    <!-- RESIZE HANDLE L -->
+    <div class="resize-handle" id="rh-left" title="Drag to resize"></div>
+
+    <!-- CENTRE: Live Playback -->
+    <div class="panel" id="panel-playback">
+      <div class="panel-header">
+        <span>Live Playback</span>
+        <span style="font-size:.6rem;opacity:.6">dbl-click any word to jump</span>
+      </div>
+      <div id="output-wrap">
+        <div id="output-scroll">
+          <!-- spacer so first word can be centred -->
+          <div id="top-spacer"></div>
+          <div id="output-display">
+            <span class="display-placeholder">Words will appear here while speaking…</span>
+          </div>
+          <!-- spacer so last word can be centred -->
+          <div id="bot-spacer"></div>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <span class="dbl-hint">double-click any word to jump</span>
+      </div>
+    </div>
+
+    <!-- RESIZE HANDLE R -->
+    <div class="resize-handle" id="rh-right" title="Drag to resize"></div>
+
+    <!-- RIGHT: Settings -->
+    <div class="panel" id="panel-settings">
+      <div class="panel-header">Settings</div>
+      <div class="panel-body">
+
+        <div class="setting-group">
+          <div class="setting-label">
+            Speed
+            <span class="setting-val" id="speed-val">1.0×</span>
+          </div>
+          <input type="range" id="speed-slider" min="0.5" max="10" step="0.1" value="1" />
+        </div>
+
+        <div class="setting-group">
+          <div class="setting-label">
+            Pitch
+            <span class="setting-val" id="pitch-val">1.0</span>
+          </div>
+          <input type="range" id="pitch-slider" min="0" max="2" step="0.1" value="1" />
+        </div>
+
+        <div class="setting-group">
+          <div class="setting-label">
+            Voice
+            <span class="setting-val" id="voice-lang">—</span>
+          </div>
+          <div class="select-wrap">
+            <select id="voice-select"><option value="">Loading voices…</option></select>
+            <svg class="select-arrow" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+          </div>
+        </div>
+
+        <!-- Keyboard shortcuts reference -->
+        <div class="kbd-section">
+          <div class="setting-label" style="margin-bottom:10px">Keyboard Shortcuts</div>
+          <div class="kbd-row"><span>Play / Pause</span><kbd>Space</kbd></div>
+          <div class="kbd-row"><span>Stop</span><kbd>S</kbd></div>
+          <div class="kbd-row"><span>Prev sentence</span><kbd>←</kbd></div>
+          <div class="kbd-row"><span>Next sentence</span><kbd>→</kbd></div>
+          <div class="kbd-row"><span>Speed up</span><kbd>↑</kbd></div>
+          <div class="kbd-row"><span>Speed down</span><kbd>↓</kbd></div>
+          <div class="kbd-row"><span>Jump to word</span><span>dbl-click</span></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /workspace -->
+
+  <!-- ══ STICKY CONTROLS BAR ══════════════════════════════ -->
+  <div id="sticky-bar">
+
+    <!-- ◀ prev sentence -->
+    <button class="btn btn-skip" id="btn-prev" disabled title="Prev sentence (←)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+    </button>
+
+    <!-- Play -->
+    <button class="btn btn-primary" id="btn-play">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      Play
+    </button>
+
+    <!-- Pause -->
+    <button class="btn btn-ghost" id="btn-pause" disabled>
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+      Pause
+    </button>
+
+    <!-- Resume -->
+    <button class="btn btn-ghost" id="btn-resume" disabled>
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      Resume
+    </button>
+
+    <!-- Stop -->
+    <button class="btn btn-danger" id="btn-stop" disabled>
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>
+      Stop
+    </button>
+
+    <!-- ▶ next sentence -->
+    <button class="btn btn-skip" id="btn-next" disabled title="Next sentence (→)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2.5-6 5.5 4V8l-5.5 4zM16 6h2v12h-2z"/></svg>
+    </button>
+
+    <div class="bar-divider"></div>
+
+    <!-- Speed quick display -->
+    <span style="font-family:var(--mono);font-size:.7rem;color:var(--muted)">
+      <span id="bar-speed">1.0×</span>
+    </span>
+
+  </div><!-- /sticky-bar -->
+
+</div><!-- /app -->
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   VOXEN v4
+   - Three-panel resizable layout
+   - Active word centred in Live Playback
+   - Text formatting preserved (pre-wrap)
+   - Double-click skip + prev/next sentence
+   ═══════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  // ── DOM ──────────────────────────────────────────────────
+  const inputArea    = document.getElementById('input-area');
+  const outputDisp   = document.getElementById('output-display');
+  const outputScroll = document.getElementById('output-scroll');
+  const topSpacer    = document.getElementById('top-spacer');
+  const botSpacer    = document.getElementById('bot-spacer');
+  const progressBar  = document.getElementById('progress-bar');
+  const statusBadge  = document.getElementById('status-badge');
+  const statusText   = document.getElementById('status-text');
+  const charCount    = document.getElementById('char-count');
+  const charDetail   = document.getElementById('char-detail');
+
+  const btnPlay   = document.getElementById('btn-play');
+  const btnPause  = document.getElementById('btn-pause');
+  const btnResume = document.getElementById('btn-resume');
+  const btnStop   = document.getElementById('btn-stop');
+  const btnPrev   = document.getElementById('btn-prev');
+  const btnNext   = document.getElementById('btn-next');
+
+  const speedSlider = document.getElementById('speed-slider');
+  const pitchSlider = document.getElementById('pitch-slider');
+  const speedVal    = document.getElementById('speed-val');
+  const pitchVal    = document.getElementById('pitch-val');
+  const barSpeed    = document.getElementById('bar-speed');
+  const voiceSelect = document.getElementById('voice-select');
+  const voiceLang   = document.getElementById('voice-lang');
+
+  const panelControls  = document.getElementById('panel-controls');
+  const panelSettings  = document.getElementById('panel-settings');
+  const rhLeft         = document.getElementById('rh-left');
+  const rhRight        = document.getElementById('rh-right');
+
+  // ── STATE ────────────────────────────────────────────────
+  let utterance      = null;
+  let wordSpans      = [];
+  let wordOffsets    = [];
+  let sentenceStarts = [];
+  let fullText       = '';
+  let totalChars     = 0;
+  let isSpeaking     = false;
+  let isPaused       = false;
+  let voices         = [];
+  let activeIdx      = -1;
+
+  // ── SETTINGS ─────────────────────────────────────────────
+  const KEY = 'voxen_settings';
+  function loadSettings() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY)||'{}');
+      if (s.speed) speedSlider.value = s.speed;
+      if (s.pitch) pitchSlider.value = s.pitch;
+      if (s.voice) voiceSelect.dataset.savedVoice = s.voice;
+      if (s.leftW)  panelControls.style.width = s.leftW;
+      if (s.rightW) panelSettings.style.width  = s.rightW;
+      updateSliders();
+    } catch(e){}
+  }
+  function saveSettings() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        speed:  speedSlider.value,
+        pitch:  pitchSlider.value,
+        voice:  voiceSelect.value,
+        leftW:  panelControls.style.width,
+        rightW: panelSettings.style.width,
+      }));
+    } catch(e){}
+  }
+  function updateSliders() {
+    const spd = parseFloat(speedSlider.value).toFixed(1);
+    speedVal.textContent = spd + '×';
+    barSpeed.textContent = spd + '×';
+    pitchVal.textContent = parseFloat(pitchSlider.value).toFixed(1);
+  }
+
+  // ── RESIZE HANDLES ───────────────────────────────────────
+  function initResize(handle, getPanel, side) {
+    let startX, startW;
+    handle.addEventListener('mousedown', e => {
+      startX = e.clientX;
+      startW = getPanel().offsetWidth;
+      handle.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      function onMove(e) {
+        const dx = side === 'left' ? e.clientX - startX : startX - e.clientX;
+        const panel = getPanel();
+        const minW = parseInt(panel.style.minWidth || getComputedStyle(panel).minWidth);
+        const maxW = parseInt(panel.style.maxWidth || getComputedStyle(panel).maxWidth);
+        panel.style.width = Math.min(maxW, Math.max(minW, startW + dx)) + 'px';
+        adjustSpacers();
+      }
+      function onUp() {
+        handle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+        saveSettings();
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
+  }
+
+  initResize(rhLeft,  () => panelControls, 'left');
+  initResize(rhRight, () => panelSettings,  'right');
+
+  // ── SPACERS FOR CENTRING ─────────────────────────────────
+  // Set top/bottom spacers to half the scroll container height
+  // so the first/last word can sit in the vertical centre.
+  function adjustSpacers() {
+    const h = outputScroll.clientHeight;
+    const half = Math.floor(h / 2);
+    topSpacer.style.height = half + 'px';
+    botSpacer.style.height = half + 'px';
+  }
+  window.addEventListener('resize', adjustSpacers);
+  // Also after fonts load
+  document.fonts.ready.then(adjustSpacers);
+
+  // ── VOICES ───────────────────────────────────────────────
+  function populateVoices() {
+    voices = speechSynthesis.getVoices();
+    if (!voices.length) return;
+    voiceSelect.innerHTML = '';
+    voices.forEach((v,i) => {
+      const o = document.createElement('option');
+      o.value = i; o.textContent = `${v.name} (${v.lang})`;
+      voiceSelect.appendChild(o);
+    });
+    const saved = voiceSelect.dataset.savedVoice;
+    if (saved) { const idx = voices.findIndex(v=>v.name===saved); if(idx>=0) voiceSelect.value=idx; }
+    updateVoiceLang();
+  }
+  function updateVoiceLang() { const v=voices[voiceSelect.value]; voiceLang.textContent=v?v.lang:'—'; }
+  speechSynthesis.onvoiceschanged = populateVoices;
+  populateVoices();
+
+  // ── SENTENCE DETECTION ───────────────────────────────────
+  function buildSentenceStarts() {
+    sentenceStarts = [0];
+    for (let i=0; i<wordSpans.length-1; i++) {
+      if (/[.!?]["']?$/.test(wordSpans[i].textContent)) {
+        sentenceStarts.push(i+1);
+      }
+    }
+  }
+  function sentenceOfWord(wi) {
+    let si=0;
+    for (let i=0; i<sentenceStarts.length; i++) {
+      if (sentenceStarts[i]<=wi) si=i; else break;
+    }
+    return si;
+  }
+
+  // ── RENDER SPANS ─────────────────────────────────────────
+  // IMPORTANT: we use white-space:pre-wrap on outputDisplay,
+  // so we insert text nodes with the ORIGINAL whitespace/newlines
+  // between word spans — preserving the pasted text layout exactly.
+  function renderSpans(text) {
+    outputDisp.innerHTML = '';
+    wordSpans   = [];
+    wordOffsets = [];
+
+    if (!text.trim()) {
+      outputDisp.innerHTML = '<span class="display-placeholder">Words will appear here while speaking…</span>';
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    let i = 0;
+
+    while (i < text.length) {
+      // Collect whitespace (preserve newlines as-is for pre-wrap)
+      let ws = '';
+      while (i < text.length && /\s/.test(text[i])) { ws += text[i]; i++; }
+      if (ws) frag.appendChild(document.createTextNode(ws));
+
+      // Collect a word
+      const start = i;
+      let word = '';
+      while (i < text.length && !/\s/.test(text[i])) { word += text[i]; i++; }
+      if (word) {
+        const s = document.createElement('span');
+        s.className = 'word';
+        s.textContent = word;
+        s.dataset.idx = wordSpans.length;
+        frag.appendChild(s);
+        wordSpans.push(s);
+        wordOffsets.push(start);
+      }
+    }
+
+    outputDisp.appendChild(frag);
+    buildSentenceStarts();
+    adjustSpacers();
+  }
+
+  // ── HIGHLIGHT & CENTRE ───────────────────────────────────
+  function clearHighlights() {
+    wordSpans.forEach(s => s.classList.remove('active','spoken'));
+    activeIdx = -1;
+  }
+
+  // Scroll so that the active word sits at the vertical centre
+  // of outputScroll. Uses getBoundingClientRect for accuracy with
+  // pre-wrap inline text (offsetTop is unreliable for inline spans).
+  function scrollToCenter(el) {
+    const scrollRect = outputScroll.getBoundingClientRect();
+    const elRect     = el.getBoundingClientRect();
+
+    // Current scroll position + offset of el centre relative to scroll container centre
+    const elCentre    = elRect.top + elRect.height / 2;
+    const scrollCentre = scrollRect.top + scrollRect.height / 2;
+    const delta       = elCentre - scrollCentre;
+
+    outputScroll.scrollBy({ top: delta, behavior: 'smooth' });
+  }
+
+  function highlightWord(ci) {
+    // binary search
+    let lo=0, hi=wordOffsets.length-1, found=-1;
+    while (lo<=hi) { const m=(lo+hi)>>1; if(wordOffsets[m]<=ci){found=m;lo=m+1;}else hi=m-1; }
+    if (found===activeIdx||found<0) return;
+    if (activeIdx>=0) { wordSpans[activeIdx].classList.remove('active'); wordSpans[activeIdx].classList.add('spoken'); }
+    activeIdx = found;
+    wordSpans[activeIdx].classList.add('active');
+    wordSpans[activeIdx].classList.remove('spoken');
+    scrollToCenter(wordSpans[activeIdx]);
+    if (totalChars>0) progressBar.style.width = Math.min((ci/totalChars)*100, 100) + '%';
+    updateSkipButtons();
+  }
+
+  function setActiveWord(wi) {
+    if (wi<0||wi>=wordSpans.length) return;
+    wordSpans.forEach((s,i)=>{ s.classList.remove('active','spoken'); if(i<wi) s.classList.add('spoken'); });
+    activeIdx = wi;
+    wordSpans[activeIdx].classList.add('active');
+    scrollToCenter(wordSpans[activeIdx]);
+    if (totalChars>0) progressBar.style.width = Math.min((wordOffsets[wi]/totalChars)*100, 100) + '%';
+    updateSkipButtons();
+  }
+
+  // ── STATUS / BUTTONS ─────────────────────────────────────
+  function setStatus(s) {
+    statusBadge.className = 'status-badge ' + s;
+    statusText.textContent = ({idle:'IDLE',playing:'PLAYING',paused:'PAUSED',done:'DONE'})[s]||'IDLE';
+  }
+  function setButtons(s) {
+    btnPlay.disabled   = s!=='idle';
+    btnPause.disabled  = s!=='playing';
+    btnResume.disabled = s!=='paused';
+    btnStop.disabled   = s==='idle';
+    updateSkipButtons();
+  }
+  function updateSkipButtons() {
+    const active = isSpeaking||isPaused;
+    btnPrev.disabled = !active || activeIdx<=0;
+    btnNext.disabled = !active || sentenceOfWord(activeIdx)>=sentenceStarts.length-1;
+  }
+
+  // ── SKIP TO WORD ─────────────────────────────────────────
+  function skipToWord(wi) {
+    if (!fullText||wi<0||wi>=wordSpans.length) return;
+    const el = wordSpans[wi];
+    el.classList.remove('skip-flash'); void el.offsetWidth; el.classList.add('skip-flash');
+
+    const wasActive = isSpeaking||isPaused;
+    const ci = wordOffsets[wi];
+    const remaining = fullText.slice(ci);
+
+    setActiveWord(wi);
+    speechSynthesis.cancel();
+    isSpeaking=false; isPaused=false;
+    if (!wasActive) return;
+
+    const utt = new SpeechSynthesisUtterance(remaining);
+    utt.rate  = parseFloat(speedSlider.value);
+    utt.pitch = parseFloat(pitchSlider.value);
+    if (voices[voiceSelect.value]) utt.voice = voices[voiceSelect.value];
+
+    utt.onboundary = e => { if(e.name==='word') highlightWord(ci+e.charIndex); };
+    utt.onstart    = () => { isSpeaking=true; isPaused=false; setStatus('playing'); setButtons('playing'); };
+    utt.onend      = () => {
+      isSpeaking=false; isPaused=false;
+      wordSpans.forEach(s=>{ s.classList.remove('active'); s.classList.add('spoken'); });
+      progressBar.style.width='100%';
+      setStatus('done'); setButtons('idle');
+    };
+    utt.onerror = e => {
+      if(e.error==='interrupted'||e.error==='canceled') return;
+      isSpeaking=false; isPaused=false; setStatus('idle'); setButtons('idle');
+    };
+    utterance = utt;
+    speechSynthesis.speak(utt);
+  }
+
+  // ── PREV / NEXT SENTENCE ─────────────────────────────────
+  function skipPrevSentence() {
+    if (!wordSpans.length) return;
+    const curSi = sentenceOfWord(Math.max(activeIdx,0));
+    const curStart = sentenceStarts[curSi];
+    const nearStart = (activeIdx - curStart) < 3;
+    const targetSi = (nearStart&&curSi>0) ? curSi-1 : curSi;
+    skipToWord(sentenceStarts[targetSi]);
+  }
+  function skipNextSentence() {
+    if (!wordSpans.length) return;
+    const curSi = sentenceOfWord(Math.max(activeIdx,0));
+    if (curSi < sentenceStarts.length-1) skipToWord(sentenceStarts[curSi+1]);
+  }
+
+  // ── PLAY ─────────────────────────────────────────────────
+  function play() {
+    const text = inputArea.value;
+    if (!text.trim()) {
+      inputArea.focus();
+      inputArea.style.borderColor='rgba(255,60,80,.5)';
+      setTimeout(()=>(inputArea.style.borderColor=''), 800);
+      return;
+    }
+    speechSynthesis.cancel();
+    fullText = text;
+    renderSpans(text);
+    clearHighlights();
+    progressBar.style.width='0%';
+    totalChars = text.length;
+    // Scroll to top
+    outputScroll.scrollTop = 0;
+
+    utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate  = parseFloat(speedSlider.value);
+    utterance.pitch = parseFloat(pitchSlider.value);
+    if (voices[voiceSelect.value]) utterance.voice = voices[voiceSelect.value];
+
+    utterance.onboundary = e => { if(e.name==='word') highlightWord(e.charIndex); };
+    utterance.onstart    = () => { isSpeaking=true; isPaused=false; setStatus('playing'); setButtons('playing'); };
+    utterance.onend      = () => {
+      isSpeaking=false; isPaused=false;
+      wordSpans.forEach(s=>{ s.classList.remove('active'); s.classList.add('spoken'); });
+      progressBar.style.width='100%';
+      setStatus('done'); setButtons('idle');
+      setTimeout(()=>{ setStatus('idle'); progressBar.style.width='0%'; }, 3000);
+    };
+    utterance.onerror = e => {
+      if(e.error==='interrupted'||e.error==='canceled') return;
+      isSpeaking=false; isPaused=false; setStatus('idle'); setButtons('idle');
+    };
+    speechSynthesis.speak(utterance);
+  }
+
+  function pause()  { if(isSpeaking&&!isPaused){speechSynthesis.pause();isPaused=true;setStatus('paused');setButtons('paused');} }
+  function resume() { if(isPaused){speechSynthesis.resume();isPaused=false;setStatus('playing');setButtons('playing');} }
+  function stop()   { speechSynthesis.cancel();isSpeaking=false;isPaused=false;clearHighlights();progressBar.style.width='0%';setStatus('idle');setButtons('idle'); }
+
+  // ── METRICS ──────────────────────────────────────────────
+  function updateMetrics() {
+    const t = inputArea.value;
+    const wc = t.trim() ? t.trim().split(/\s+/).length : 0;
+    charCount.textContent = t.length + ' · ' + wc + 'w';
+    charDetail.textContent = t.length + ' chars · ' + wc + ' words';
+  }
+
+  // ── EVENTS ───────────────────────────────────────────────
+  btnPlay.addEventListener('click',   play);
+  btnPause.addEventListener('click',  pause);
+  btnResume.addEventListener('click', resume);
+  btnStop.addEventListener('click',   stop);
+  btnPrev.addEventListener('click',   skipPrevSentence);
+  btnNext.addEventListener('click',   skipNextSentence);
+
+  speedSlider.addEventListener('input', ()=>{ updateSliders(); saveSettings(); });
+  pitchSlider.addEventListener('input', ()=>{ updateSliders(); saveSettings(); });
+  voiceSelect.addEventListener('change',()=>{ updateVoiceLang(); saveSettings(); });
+  inputArea.addEventListener('input', updateMetrics);
+
+  // Double-click to jump
+  outputDisp.addEventListener('dblclick', e => {
+    const span = e.target.closest('.word');
+    if (!span) return;
+    const wi = parseInt(span.dataset.idx, 10);
+    if (isNaN(wi)) return;
+    if (isSpeaking||isPaused) { skipToWord(wi); }
+    else if (fullText) { isSpeaking=true; skipToWord(wi); }
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (e.target===inputArea) return;
+    if (e.key===' ') { e.preventDefault(); if(!isSpeaking&&!isPaused) play(); else if(isSpeaking&&!isPaused) pause(); else if(isPaused) resume(); }
+    if (e.key==='s'||e.key==='S') { e.preventDefault(); stop(); }
+    if (e.key==='ArrowLeft')  { e.preventDefault(); skipPrevSentence(); }
+    if (e.key==='ArrowRight') { e.preventDefault(); skipNextSentence(); }
+    if (e.key==='ArrowUp')    { e.preventDefault(); speedSlider.value=Math.min(10,parseFloat(speedSlider.value)+0.1).toFixed(1); speedSlider.dispatchEvent(new Event('input')); }
+    if (e.key==='ArrowDown')  { e.preventDefault(); speedSlider.value=Math.max(0.5,parseFloat(speedSlider.value)-0.1).toFixed(1); speedSlider.dispatchEvent(new Event('input')); }
+  });
+
+  // Chromium background-tab bug workaround
+  setInterval(()=>{ if(isSpeaking&&!isPaused&&speechSynthesis.speaking){ speechSynthesis.pause(); speechSynthesis.resume(); } }, 10000);
+
+  // ── INIT ─────────────────────────────────────────────────
+  loadSettings();
+  updateMetrics();
+  setButtons('idle');
+  setStatus('idle');
+  adjustSpacers();
+
+})();
+</script>
+</body>
+</html>
