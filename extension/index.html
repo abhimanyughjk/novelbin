@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NovelBin — Chapter Extractor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- ═══════════════════════════════════════
+       PRINT STYLES — only active on print
+  ═══════════════════════════════════════ -->
+  <style id="printStyles">
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+      body > *:not(#printRoot) { display: none !important; }
+
+      #printRoot {
+        display: block !important;
+        position: static !important;
+        width: 100% !important;
+        background: #fff !important;
+        color: #000 !important;
+        font-family: var(--pf, 'Georgia, serif') !important;
+        font-size: var(--ps, 11pt) !important;
+        line-height: var(--pl, 1.6) !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+
+      #printRoot .print-chapter { page-break-after: var(--pb, auto); margin-bottom: 0; }
+      #printRoot .print-chapter-title {
+        font-family: var(--pf, 'Georgia, serif') !important;
+        font-size: calc(var(--ps, 11pt) + 2pt) !important;
+        font-weight: bold;
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 4pt;
+        margin-bottom: 10pt;
+      }
+      #printRoot .print-para { margin-bottom: 6pt; text-align: justify; }
+      #printRoot .print-divider { border: none; border-top: 1px dashed #999; margin: 10pt 0; }
+
+      /* columns only when user enables them */
+      #printRoot.two-col { column-count: 2; column-gap: 20pt; }
+      #printRoot.two-col .print-chapter-title { column-span: all; }
+    }
+  </style>
+
+  <style>
+    /* ═══ CSS VARIABLES ═══════════════════════════════════════════ */
+    :root {
+      --bg:       #0b0c10;
+      --surface:  #12141a;
+      --surface2: #1a1d27;
+      --surface3: #202330;
+      --border:   #1e2235;
+      --accent:   #00e5ff;
+      --accent2:  #7c3aed;
+      --accent3:  #ff3cac;
+      --success:  #00f5a0;
+      --error:    #ff4560;
+      --warn:     #ffb300;
+      --text:     #cdd6f4;
+      --muted:    #6b7394;
+      --bookmark: #f59e0b;
+      --ff:       'Rajdhani', sans-serif;
+      --mono:     'Share Tech Mono', monospace;
+    }
+
+    /* ═══ RESET ═══════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--ff);
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ═══ BG GRID TEXTURE ════════════════════════════════════════ */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 60% 40% at 15% 0%,  rgba(124,58,237,.06) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 50% at 85% 100%, rgba(0,229,255,.05) 0%, transparent 60%),
+        repeating-linear-gradient(0deg,  transparent, transparent 39px, rgba(255,255,255,.012) 39px, rgba(255,255,255,.012) 40px),
+        repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,.012) 39px, rgba(255,255,255,.012) 40px);
+    }
+
+    /* ═══ HEADER ════════════════════════════════════════════════ */
+    #appHeader {
+      position: relative; z-index: 10; flex-shrink: 0;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 11px 20px 9px;
+      display: flex; align-items: center; gap: 13px;
+    }
+    #appHeader::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(0,229,255,.04), transparent 60%);
+      pointer-events: none;
+    }
+    .logo-mark {
+      width: 38px; height: 38px; flex-shrink: 0; border-radius: 9px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 17px; font-weight: 700; color: #000;
+      box-shadow: 0 0 14px rgba(0,229,255,.4);
+    }
+    .header-text h1 { font-size: 15px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; color: #fff; }
+    .header-text p  { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+    .ver-badge {
+      margin-left: auto; font-family: var(--mono); font-size: 10px;
+      color: var(--accent); background: rgba(0,229,255,.08);
+      border: 1px solid rgba(0,229,255,.2); border-radius: 4px;
+      padding: 2px 8px; letter-spacing: 1px;
+    }
+    .scanline { height: 2px; flex-shrink: 0; background: linear-gradient(90deg, transparent, var(--accent) 30%, var(--accent2) 70%, transparent); opacity: 0.5; }
+
+    /* ═══ URL BAR ═══════════════════════════════════════════════ */
+    #urlBar {
+      position: relative; z-index: 10; flex-shrink: 0;
+      background: var(--surface2); border-bottom: 1px solid var(--border);
+      padding: 8px 20px; display: flex; align-items: center; gap: 9px;
+    }
+    .url-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; white-space: nowrap; }
+    #urlInput {
+      flex: 1; background: var(--surface3); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-family: var(--mono);
+      font-size: 11px; padding: 5px 10px; outline: none;
+      transition: border-color .2s;
+    }
+    #urlInput:focus { border-color: rgba(0,229,255,.35); }
+    #urlInput::placeholder { color: var(--muted); }
+    .url-go {
+      padding: 5px 14px; border-radius: 6px; border: 1px solid var(--accent);
+      background: rgba(0,229,255,.08); color: var(--accent);
+      font-family: var(--ff); font-size: 12px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; cursor: pointer;
+      transition: all .2s; white-space: nowrap;
+    }
+    .url-go:hover { background: rgba(0,229,255,.18); box-shadow: 0 0 10px rgba(0,229,255,.3); }
+
+    /* ═══ NAV TABS ══════════════════════════════════════════════ */
+    #navTabs {
+      position: relative; z-index: 10; flex-shrink: 0;
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-tab {
+      padding: 9px 6px; background: var(--surface); border: none; color: var(--muted);
+      font-family: var(--ff); font-size: 12px; font-weight: 600;
+      letter-spacing: .8px; text-transform: uppercase; cursor: pointer; transition: all .2s;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      border-right: 1px solid var(--border);
+    }
+    .nav-tab:last-child { border-right: none; }
+    .nav-tab.active { background: rgba(0,229,255,.07); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+    .nav-tab:hover:not(.active) { background: rgba(255,255,255,.03); color: var(--text); }
+
+    /* ═══ MAIN WORKSPACE ════════════════════════════════════════ */
+    #workspace {
+      position: relative; z-index: 1;
+      flex: 1; overflow: hidden;
+      display: flex;
+    }
+
+    .panel { display: none; flex-direction: column; gap: 12px; padding: 16px 20px; overflow-y: auto; flex: 1; }
+    .panel.active { display: flex; }
+    .panel::-webkit-scrollbar { width: 4px; }
+    .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ═══ FORM ELEMENTS ════════════════════════════════════════ */
+    .section-label {
+      font-family: var(--mono); font-size: 10px; color: var(--muted);
+      letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 5px;
+    }
+
+    .chapter-info {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-left: 3px solid var(--accent2); border-radius: 6px;
+      padding: 9px 12px; min-height: 34px; display: flex; align-items: center; gap: 8px;
+    }
+    .ci-label { font-family: var(--mono); font-size: 10px; color: var(--accent2); letter-spacing: 1px; text-transform: uppercase; flex-shrink: 0; }
+    .ci-val { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.3; font-style: italic; }
+    .ci-val:empty::before { content: attr(data-ph); color: var(--muted); font-style: normal; font-weight: 400; }
+
+    /* ═══ BUTTONS ═══════════════════════════════════════════════ */
+    .primary-btn {
+      width: 100%; padding: 12px;
+      background: linear-gradient(135deg, rgba(0,229,255,.1), rgba(124,58,237,.1));
+      border: 1px solid var(--accent); border-radius: 8px; color: var(--accent);
+      font-family: var(--ff); font-size: 14px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all .2s;
+    }
+    .primary-btn:hover:not(:disabled) { box-shadow: 0 0 14px rgba(0,229,255,.4); color: #fff; transform: translateY(-1px); }
+    .primary-btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+
+    .bulk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .bulk-btn {
+      padding: 12px 10px; border-radius: 8px;
+      font-family: var(--ff); font-size: 13px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: all .2s;
+      border: 1px solid; display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .bulk-btn.start { background: rgba(255,179,0,.08); border-color: var(--warn); color: var(--warn); }
+    .bulk-btn.start:hover:not(:disabled) { background: rgba(255,179,0,.18); box-shadow: 0 0 12px rgba(255,179,0,.25); }
+    .bulk-btn.stop  { background: rgba(255,69,96,.08); border-color: var(--error); color: var(--error); }
+    .bulk-btn.stop:hover:not(:disabled)  { background: rgba(255,69,96,.18); box-shadow: 0 0 12px rgba(255,69,96,.25); }
+    .bulk-btn:disabled { opacity: .3; cursor: not-allowed; }
+
+    .actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .action-btn {
+      padding: 9px; border-radius: 7px; font-family: var(--ff); font-size: 12px;
+      font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+      cursor: pointer; transition: all .2s; border: 1px solid;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .action-btn.copy  { background: rgba(0,245,160,.08);  border-color: var(--success); color: var(--success); }
+    .action-btn.copy:hover:not(:disabled)  { background: rgba(0,245,160,.18); }
+    .action-btn.print { background: rgba(124,58,237,.08); border-color: var(--accent2); color: var(--accent2); }
+    .action-btn.print:hover:not(:disabled) { background: rgba(124,58,237,.18); box-shadow: 0 0 10px rgba(124,58,237,.25); }
+    .action-btn.clear { background: rgba(255,69,96,.08);  border-color: var(--error);   color: var(--error); }
+    .action-btn.clear:hover:not(:disabled) { background: rgba(255,69,96,.18); }
+    .action-btn:disabled { opacity: .3; cursor: not-allowed; }
+
+    /* ═══ PROGRESS ══════════════════════════════════════════════ */
+    .progress-wrap { display: none; flex-direction: column; gap: 6px; }
+    .progress-wrap.show { display: flex; }
+    .progress-top { display: flex; justify-content: space-between; align-items: center; }
+    .progress-label  { font-family: var(--mono); font-size: 11px; color: var(--warn); }
+    .chapter-counter { font-family: var(--mono); font-size: 11px; color: var(--accent2); }
+    .progress-bar-track { height: 4px; background: var(--surface2); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+    .progress-bar-fill  { height: 100%; border-radius: 4px; width: 30%; background-image: linear-gradient(90deg, var(--accent2) 0%, var(--accent) 50%, var(--accent2) 100%); background-size: 200% 100%; animation: shimmer 1.5s linear infinite; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .progress-current { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ═══ SCRAPE CANVAS STATUS ══════════════════════════════════ */
+    .canvas-indicator {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,179,0,.07); border: 1px solid rgba(255,179,0,.25);
+      border-radius: 8px; padding: 9px 13px;
+    }
+    .canvas-pulse { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: var(--warn); box-shadow: 0 0 8px var(--warn); animation: bgpulse 1.2s ease-in-out infinite; }
+    @keyframes bgpulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.75); } }
+    .canvas-text { font-family: var(--mono); font-size: 11px; color: var(--warn); letter-spacing: .5px; flex: 1; }
+    .canvas-hint { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
+
+    /* ═══ LOADER ════════════════════════════════════════════════ */
+    .loader { display: none; align-items: center; justify-content: center; gap: 10px; padding: 2px 0; }
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(0,229,255,.15); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-text { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 1.5px; animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+    /* ═══ STATUS ════════════════════════════════════════════════ */
+    .status { display: none; padding: 7px 12px; border-radius: 6px; font-family: var(--mono); font-size: 11px; letter-spacing: .5px; border-left: 3px solid; }
+    .status.success { background: rgba(0,245,160,.08);  border-color: var(--success); color: var(--success); }
+    .status.error   { background: rgba(255,69,96,.08);  border-color: var(--error);   color: var(--error); }
+    .status.info    { background: rgba(0,229,255,.08);  border-color: var(--accent);  color: var(--accent); }
+    .status.warn    { background: rgba(255,179,0,.08);  border-color: var(--warn);    color: var(--warn); }
+
+    /* ═══ TEXTAREA ══════════════════════════════════════════════ */
+    .output-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .output-label  { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+    .stats { display: flex; gap: 8px; }
+    .stat  { font-family: var(--mono); font-size: 10px; color: var(--accent2); background: rgba(124,58,237,.1); border: 1px solid rgba(124,58,237,.2); border-radius: 3px; padding: 1px 6px; }
+
+    textarea.main-out {
+      width: 100%; height: 220px;
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-family: var(--mono); font-size: 11.5px;
+      line-height: 1.7; padding: 11px; resize: vertical; outline: none; transition: border-color .2s;
+    }
+    textarea.main-out:focus { border-color: rgba(0,229,255,.3); }
+    textarea.main-out::placeholder { color: var(--muted); font-style: italic; }
+
+    /* ═══ HISTORY ═══════════════════════════════════════════════ */
+    .hist-header { display: flex; align-items: center; justify-content: space-between; }
+    .hist-header-left { display: flex; align-items: center; gap: 8px; }
+    .hist-title { font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text); }
+    .hist-count { font-family: var(--mono); font-size: 10px; color: var(--accent2); background: rgba(124,58,237,.15); border: 1px solid rgba(124,58,237,.3); border-radius: 10px; padding: 1px 8px; }
+    .hist-clear-all { font-family: var(--mono); font-size: 10px; color: var(--error); background: rgba(255,69,96,.08); border: 1px solid rgba(255,69,96,.25); border-radius: 4px; padding: 3px 9px; cursor: pointer; transition: all .2s; }
+    .hist-clear-all:hover { background: rgba(255,69,96,.18); }
+
+    .hist-sub-tabs { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+    .hist-sub-tab {
+      padding: 7px 10px; background: var(--surface2); border: none; color: var(--muted);
+      font-family: var(--ff); font-size: 12px; font-weight: 600; letter-spacing: .8px;
+      text-transform: uppercase; cursor: pointer; transition: all .2s;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .hist-sub-tab:first-child { border-right: 1px solid var(--border); }
+    .hist-sub-tab.active { background: rgba(0,229,255,.07); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+    .hist-sub-tab:hover:not(.active) { background: rgba(255,255,255,.03); color: var(--text); }
+
+    .hist-list { display: flex; flex-direction: column; gap: 8px; }
+    .hist-list::-webkit-scrollbar { width: 4px; }
+
+    .hc {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 12px; transition: border-color .2s, background .2s;
+      position: relative; overflow: hidden;
+    }
+    .hc::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, var(--accent2), var(--accent)); border-radius: 8px 0 0 8px; }
+    .hc:hover { border-color: rgba(0,229,255,.2); background: var(--surface3); }
+    .hc:hover .hc-actions { opacity: 1; }
+    .hc.bm-card::before { background: linear-gradient(180deg, var(--bookmark), #f97316); }
+    .hc.bm-card:hover { border-color: rgba(245,158,11,.3); }
+
+    .hc-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+    .hc-title { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.4; flex: 1; }
+    .hc-ts    { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+
+    .hc-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+    .hc-badge { font-family: var(--mono); font-size: 10px; border-radius: 3px; padding: 1px 7px; }
+    .hc-badge.single { background: rgba(0,229,255,.08);  border: 1px solid rgba(0,229,255,.2);  color: var(--accent); }
+    .hc-badge.bulk   { background: rgba(255,179,0,.08);  border: 1px solid rgba(255,179,0,.2);  color: var(--warn); }
+    .hc-badge.words  { background: rgba(124,58,237,.08); border: 1px solid rgba(124,58,237,.2); color: var(--accent2); }
+    .hc-badge.range  { background: rgba(0,245,160,.06);  border: 1px solid rgba(0,245,160,.2);  color: var(--success); }
+    .hc-badge.bm     { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.25); color: var(--bookmark); }
+    .hc-badge.auto   { background: rgba(0,229,255,.05);  border: 1px solid rgba(0,229,255,.15); color: var(--muted); }
+
+    .bm-detail { font-family: var(--mono); font-size: 10px; color: var(--muted); line-height: 1.6; margin-bottom: 7px; }
+    .bm-arrow { color: var(--bookmark); margin: 0 5px; }
+
+    .hc-actions { display: flex; gap: 6px; opacity: 0; transition: opacity .2s; }
+    .hc-btn {
+      flex: 1; padding: 5px 8px; border-radius: 5px; border: 1px solid;
+      font-family: var(--ff); font-size: 11px; font-weight: 600;
+      letter-spacing: .8px; text-transform: uppercase; cursor: pointer; transition: all .15s;
+    }
+    .hc-btn.load   { background: rgba(0,229,255,.07);  border-color: var(--accent);   color: var(--accent); }
+    .hc-btn.load:hover { background: rgba(0,229,255,.16); }
+    .hc-btn.recopy { background: rgba(0,245,160,.07);  border-color: var(--success);  color: var(--success); }
+    .hc-btn.recopy:hover { background: rgba(0,245,160,.16); }
+    .hc-btn.printhc { background: rgba(124,58,237,.07); border-color: var(--accent2); color: var(--accent2); }
+    .hc-btn.printhc:hover { background: rgba(124,58,237,.16); }
+    .hc-btn.del    { background: rgba(255,69,96,.07);  border-color: var(--error);    color: var(--error); }
+    .hc-btn.del:hover { background: rgba(255,69,96,.16); }
+
+    .hist-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 0; gap: 10px; color: var(--muted); }
+    .hist-empty .icon { font-size: 32px; opacity: .3; }
+    .hist-empty .msg  { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; text-align: center; }
+
+    /* ═══ PRINT PANEL ═══════════════════════════════════════════ */
+    #panelPrint { gap: 14px; }
+    .print-preview-wrap {
+      border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-shrink: 0;
+      background: #fff; min-height: 220px; max-height: 300px; overflow-y: auto;
+    }
+    #printPreview {
+      padding: 20px 24px;
+      font-size: var(--prev-size, 11pt);
+      line-height: var(--prev-lh, 1.6);
+      color: #111;
+      font-family: var(--prev-font, Georgia, serif);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #printPreview.two-col { column-count: 2; column-gap: 24px; }
+
+    .print-controls {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    .print-control-group { display: flex; flex-direction: column; gap: 5px; }
+    .ctrl-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+    .ctrl-row   { display: flex; align-items: center; gap: 8px; }
+
+    input[type=range].print-slider {
+      flex: 1; -webkit-appearance: none; appearance: none;
+      height: 4px; background: var(--surface2); border-radius: 4px; outline: none; cursor: pointer;
+    }
+    input[type=range].print-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+      background: var(--accent2); box-shadow: 0 0 6px rgba(124,58,237,.5); cursor: pointer;
+    }
+    .ctrl-val { font-family: var(--mono); font-size: 10px; color: var(--accent2); min-width: 30px; text-align: right; }
+
+    select.print-select {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-family: var(--mono);
+      font-size: 11px; padding: 6px 8px; outline: none; cursor: pointer;
+      transition: border-color .2s;
+    }
+    select.print-select:focus { border-color: rgba(124,58,237,.4); }
+
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .toggle-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    .toggle {
+      position: relative; width: 36px; height: 20px; flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track {
+      position: absolute; inset: 0; border-radius: 20px;
+      background: var(--surface3); border: 1px solid var(--border);
+      cursor: pointer; transition: background .2s, border-color .2s;
+    }
+    .toggle input:checked ~ .toggle-track { background: rgba(124,58,237,.3); border-color: var(--accent2); }
+    .toggle-thumb {
+      position: absolute; top: 3px; left: 3px; width: 14px; height: 14px;
+      border-radius: 50%; background: var(--muted); transition: transform .2s, background .2s;
+      pointer-events: none;
+    }
+    .toggle input:checked ~ .toggle-track ~ .toggle-thumb {
+      transform: translateX(16px); background: var(--accent2);
+    }
+
+    .print-source-info {
+      background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--accent2);
+      border-radius: 6px; padding: 8px 12px; font-family: var(--mono); font-size: 10px;
+      color: var(--muted); letter-spacing: .5px;
+    }
+    .print-source-info strong { color: var(--text); }
+
+    /* ═══ FOOTER ════════════════════════════════════════════════ */
+    #appFooter {
+      position: relative; z-index: 10; flex-shrink: 0;
+      padding: 6px 20px 8px; display: flex; align-items: center; justify-content: space-between;
+      border-top: 1px solid var(--border);
+    }
+    .footer-text { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent3); box-shadow: 0 0 6px var(--accent3); animation: blink 2s ease-in-out infinite; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .2; } }
+
+    /* ═══ HIDDEN IFRAME CANVAS ══════════════════════════════════ */
+    #scrapeFrame {
+      position: fixed; top: -9999px; left: -9999px;
+      width: 1200px; height: 900px;
+      border: none; visibility: hidden; pointer-events: none;
+      z-index: -1;
+    }
+
+    /* ═══ PRINT ROOT (hidden in screen mode) ═══════════════════ */
+    #printRoot { display: none; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ HIDDEN SCRAPING CANVAS ═════════════════════════════════ -->
+<iframe id="scrapeFrame" sandbox="allow-same-origin allow-scripts" referrerpolicy="no-referrer"></iframe>
+
+<!-- ═══ PRINT ROOT (only shown during print) ══════════════════ -->
+<div id="printRoot"></div>
+
+<!-- ═══ APP SHELL ══════════════════════════════════════════════ -->
+<div id="appHeader">
+  <div class="logo-mark">N</div>
+  <div class="header-text">
+    <h1>NovelBin Extractor</h1>
+    <p>novelbin.com // chapter ripper — web edition</p>
+  </div>
+  <span class="ver-badge">v6.0</span>
+</div>
+<div class="scanline"></div>
+
+<!-- URL Bar -->
+<div id="urlBar">
+  <span class="url-label">URL →</span>
+  <input id="urlInput" type="url" placeholder="https://novelbin.com/b/novel-slug/chapter-1" spellcheck="false" />
+  <button class="url-go" id="urlGoBtn">Load</button>
+</div>
+
+<!-- Nav Tabs -->
+<div id="navTabs">
+  <button class="nav-tab active" id="tabSingle" >📄 Current</button>
+  <button class="nav-tab"        id="tabBulk"   >📚 Till Latest</button>
+  <button class="nav-tab"        id="tabHistory">🕘 History</button>
+  <button class="nav-tab"        id="tabPrint"  >🖨 Print</button>
+</div>
+
+<!-- ═══ WORKSPACE ══════════════════════════════════════════════ -->
+<div id="workspace">
+
+  <!-- ── SINGLE PANEL ────────────────────────────────────── -->
+  <div class="panel active" id="panelSingle">
+
+    <div class="chapter-info">
+      <span class="ci-label">Chapter</span>
+      <span class="ci-val" id="chapterTitle" data-ph="No chapter loaded yet"></span>
+    </div>
+
+    <button class="primary-btn" id="extractBtn">⚡ Extract This Chapter</button>
+
+    <div class="loader" id="loaderSingle">
+      <div class="spinner"></div>
+      <span class="loader-text">EXTRACTING VIA CANVAS...</span>
+    </div>
+
+    <div class="status" id="statusSingle"></div>
+
+    <div>
+      <div class="output-header">
+        <span class="output-label">Extracted Text</span>
+        <div class="stats">
+          <span class="stat" id="wordCount">0 words</span>
+          <span class="stat" id="charCount">0 chars</span>
+        </div>
+      </div>
+      <textarea id="output" class="main-out" readonly placeholder="Paste a novelbin chapter URL above, click Load, then Extract…"></textarea>
+    </div>
+
+    <div class="actions">
+      <button class="action-btn copy"  id="copyBtn"  disabled>📋 Copy</button>
+      <button class="action-btn print" id="printBtn" disabled>🖨 Print</button>
+      <button class="action-btn clear" id="clearBtn" disabled>🗑 Clear</button>
+    </div>
+  </div>
+
+  <!-- ── BULK PANEL ──────────────────────────────────────── -->
+  <div class="panel" id="panelBulk">
+
+    <div class="chapter-info">
+      <span class="ci-label">Progress</span>
+      <span class="ci-val" id="bulkChapterTitle" data-ph="Ready to start bulk scrape"></span>
+    </div>
+
+    <div id="canvasIndicator" style="display:none;" class="canvas-indicator">
+      <div class="canvas-pulse"></div>
+      <span id="canvasIndicatorText" class="canvas-text">Scraping via hidden canvas…</span>
+      <span class="canvas-hint">No tab opened</span>
+    </div>
+
+    <div class="bulk-grid">
+      <button class="bulk-btn start" id="bulkStartBtn">🚀 Start Bulk</button>
+      <button class="bulk-btn stop"  id="bulkStopBtn" disabled>⏹ Stop</button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-top">
+        <span class="progress-label"  id="progressLabel">SCRAPING...</span>
+        <span class="chapter-counter" id="chapterCounter">0 chapters</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill"></div>
+      </div>
+      <div class="progress-current" id="progressCurrent">Initialising…</div>
+    </div>
+
+    <div class="status" id="statusBulk"></div>
+
+    <div>
+      <div class="output-header">
+        <span class="output-label">Collected Text</span>
+        <div class="stats">
+          <span class="stat" id="bulkWordCount">0 words</span>
+          <span class="stat" id="bulkCharCount">0 chars</span>
+        </div>
+      </div>
+      <textarea id="bulkOutput" class="main-out" readonly placeholder="Chapters accumulate here as they are scraped…"></textarea>
+    </div>
+
+    <div class="actions">
+      <button class="action-btn copy"  id="bulkCopyBtn"  disabled>📋 Copy</button>
+      <button class="action-btn print" id="bulkPrintBtn" disabled>🖨 Print</button>
+      <button class="action-btn clear" id="bulkClearBtn" disabled>🗑 Clear</button>
+    </div>
+  </div>
+
+  <!-- ── HISTORY PANEL ───────────────────────────────────── -->
+  <div class="panel" id="panelHistory">
+
+    <div class="hist-header">
+      <div class="hist-header-left">
+        <span class="hist-title">History</span>
+        <span class="hist-count" id="histCountBadge">0</span>
+      </div>
+      <button class="hist-clear-all" id="histClearAll">Clear All</button>
+    </div>
+
+    <div class="hist-sub-tabs">
+      <button class="hist-sub-tab active" id="subTabExtracts" >📄 Extracts</button>
+      <button class="hist-sub-tab"        id="subTabBookmarks">🔖 Bookmark Updates</button>
+    </div>
+
+    <div id="extractsList"  class="hist-list"></div>
+    <div id="bookmarksList" class="hist-list" style="display:none;"></div>
+
+    <div class="status" id="statusHistory"></div>
+  </div>
+
+  <!-- ── PRINT PANEL ─────────────────────────────────────── -->
+  <div class="panel" id="panelPrint">
+
+    <div class="print-source-info" id="printSourceInfo">
+      <strong>Print source:</strong> No text loaded — extract a chapter first, then configure here.
+    </div>
+
+    <!-- Live preview -->
+    <div>
+      <div class="section-label">Live Preview (approx.)</div>
+      <div class="print-preview-wrap">
+        <div id="printPreview">No text to preview yet.</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="print-controls">
+
+      <div class="print-control-group">
+        <span class="ctrl-label">Font Size</span>
+        <div class="ctrl-row">
+          <input type="range" class="print-slider" id="fontSizeSlider" min="7" max="16" step="0.5" value="11" />
+          <span class="ctrl-val" id="fontSizeVal">11pt</span>
+        </div>
+      </div>
+
+      <div class="print-control-group">
+        <span class="ctrl-label">Line Height</span>
+        <div class="ctrl-row">
+          <input type="range" class="print-slider" id="lineHeightSlider" min="1.2" max="2.2" step="0.1" value="1.6" />
+          <span class="ctrl-val" id="lineHeightVal">1.6</span>
+        </div>
+      </div>
+
+      <div class="print-control-group">
+        <span class="ctrl-label">Font Family</span>
+        <select class="print-select" id="fontFamilySelect">
+          <option value="Georgia, serif">Georgia (Serif)</option>
+          <option value="'Times New Roman', serif">Times New Roman</option>
+          <option value="'Palatino', serif">Palatino</option>
+          <option value="Arial, sans-serif">Arial (Sans)</option>
+          <option value="'Helvetica Neue', sans-serif">Helvetica</option>
+          <option value="'Courier New', monospace">Courier (Mono)</option>
+        </select>
+      </div>
+
+      <div class="print-control-group">
+        <span class="ctrl-label">Page Break</span>
+        <select class="print-select" id="pageBreakSelect">
+          <option value="auto">None (continuous)</option>
+          <option value="always">After every chapter</option>
+        </select>
+      </div>
+
+    </div>
+
+    <!-- Toggles -->
+    <div class="print-control-group" style="gap:8px;">
+      <div class="toggle-row">
+        <span class="toggle-label">Two-column layout (saves paper)</span>
+        <label class="toggle">
+          <input type="checkbox" id="twoColToggle" />
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Chapter titles visible</span>
+        <label class="toggle">
+          <input type="checkbox" id="titlesToggle" checked />
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Chapter dividers</span>
+        <label class="toggle">
+          <input type="checkbox" id="dividersToggle" checked />
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+    </div>
+
+    <button class="primary-btn" id="doPrintBtn" disabled>🖨 Open Print Dialog</button>
+    <div class="status" id="statusPrint"></div>
+
+  </div>
+
+</div><!-- /workspace -->
+
+<div id="appFooter">
+  <span class="footer-text" id="footerText">Open a NovelBin chapter URL above to get started</span>
+  <div class="dot"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+/* ─── STORAGE (localStorage, no extension APIs) ───────────────── */
+const HISTORY_KEY     = 'nb_history';
+const BOOKMARK_LOG    = 'nb_bm_log';
+const MAX_HISTORY     = 30;
+const MAX_BM_LOG      = 50;
+const PRINT_CFG_KEY   = 'nb_print_cfg';
+
+function storageGet(key, def) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch { return def; }
+}
+function storageSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+
+/* ─── DOM ─────────────────────────────────────────────────────── */
+const urlInput          = document.getElementById('urlInput');
+const urlGoBtn          = document.getElementById('urlGoBtn');
+const tabSingle         = document.getElementById('tabSingle');
+const tabBulk           = document.getElementById('tabBulk');
+const tabHistory        = document.getElementById('tabHistory');
+const tabPrint          = document.getElementById('tabPrint');
+const panelSingle       = document.getElementById('panelSingle');
+const panelBulk         = document.getElementById('panelBulk');
+const panelHistory      = document.getElementById('panelHistory');
+const panelPrint        = document.getElementById('panelPrint');
+
+const extractBtn        = document.getElementById('extractBtn');
+const loaderSingle      = document.getElementById('loaderSingle');
+const output            = document.getElementById('output');
+const statusSingle      = document.getElementById('statusSingle');
+const chapterTitle      = document.getElementById('chapterTitle');
+const wordCount         = document.getElementById('wordCount');
+const charCount         = document.getElementById('charCount');
+const copyBtn           = document.getElementById('copyBtn');
+const printBtn          = document.getElementById('printBtn');
+const clearBtn          = document.getElementById('clearBtn');
+
+const bulkStartBtn      = document.getElementById('bulkStartBtn');
+const bulkStopBtn       = document.getElementById('bulkStopBtn');
+const progressWrap      = document.getElementById('progressWrap');
+const progressLabel     = document.getElementById('progressLabel');
+const chapterCounter    = document.getElementById('chapterCounter');
+const progressCurrent   = document.getElementById('progressCurrent');
+const bulkOutput        = document.getElementById('bulkOutput');
+const statusBulk        = document.getElementById('statusBulk');
+const bulkChapterTitle  = document.getElementById('bulkChapterTitle');
+const bulkWordCount     = document.getElementById('bulkWordCount');
+const bulkCharCount     = document.getElementById('bulkCharCount');
+const bulkCopyBtn       = document.getElementById('bulkCopyBtn');
+const bulkPrintBtn      = document.getElementById('bulkPrintBtn');
+const bulkClearBtn      = document.getElementById('bulkClearBtn');
+const canvasIndicator   = document.getElementById('canvasIndicator');
+const canvasIndicatorText= document.getElementById('canvasIndicatorText');
+
+const histCountBadge    = document.getElementById('histCountBadge');
+const histClearAll      = document.getElementById('histClearAll');
+const extractsList      = document.getElementById('extractsList');
+const bookmarksList     = document.getElementById('bookmarksList');
+const statusHistory     = document.getElementById('statusHistory');
+const subTabExtracts    = document.getElementById('subTabExtracts');
+const subTabBookmarks   = document.getElementById('subTabBookmarks');
+
+const printSourceInfo   = document.getElementById('printSourceInfo');
+const printPreview      = document.getElementById('printPreview');
+const fontSizeSlider    = document.getElementById('fontSizeSlider');
+const fontSizeVal       = document.getElementById('fontSizeVal');
+const lineHeightSlider  = document.getElementById('lineHeightSlider');
+const lineHeightVal     = document.getElementById('lineHeightVal');
+const fontFamilySelect  = document.getElementById('fontFamilySelect');
+const pageBreakSelect   = document.getElementById('pageBreakSelect');
+const twoColToggle      = document.getElementById('twoColToggle');
+const titlesToggle      = document.getElementById('titlesToggle');
+const dividersToggle    = document.getElementById('dividersToggle');
+const doPrintBtn        = document.getElementById('doPrintBtn');
+const statusPrint       = document.getElementById('statusPrint');
+const footerText        = document.getElementById('footerText');
+
+const scrapeFrame       = document.getElementById('scrapeFrame');
+const printRoot         = document.getElementById('printRoot');
+
+/* ─── STATE ───────────────────────────────────────────────────── */
+let singleText      = '';
+let singleTitle     = '';
+let singleUrl       = '';
+let bulkText        = '';
+let bulkRunning     = false;
+let bulkStopped     = false;
+let bulkChunks      = [];
+let bulkFirstTitle  = '';
+let bulkLastTitle   = '';
+let bulkCount       = 0;
+let bulkStartUrl    = '';
+let activeHistSub   = 'extracts';
+// printData: { text, title, chunks: [{title,content}] }
+let printData       = null;
+
+/* ─── UTILS ───────────────────────────────────────────────────── */
+function showStatus(el, msg, type = 'info', persist = false) {
+  el.textContent = msg;
+  el.className = 'status ' + type;
+  el.style.display = 'block';
+  if (!persist) setTimeout(() => { el.style.display = 'none'; }, 4500);
+}
+function calcStats(text) {
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  return { words, chars: text.length };
+}
+function fmtTimestamp(ts) {
+  const d = new Date(ts), p = n => String(n).padStart(2, '0');
+  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${d.getDate()} ${mo[d.getMonth()]} ${d.getFullYear()} · ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function timeAgo(ts) {
+  const m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function trunc(s, n) { return s && s.length > n ? s.slice(0,n)+'…' : (s||'—'); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function novelBaseUrl(url) {
+  try {
+    const u = new URL(url);
+    const p = u.pathname.split('/').filter(Boolean);
+    return p.length >= 2 ? `${u.origin}/${p[0]}/${p[1]}` : null;
+  } catch { return null; }
+}
+
+/* ─── TAB SWITCHING ───────────────────────────────────────────── */
+function switchTab(tab, panel) {
+  [tabSingle, tabBulk, tabHistory, tabPrint].forEach(t => t.classList.remove('active'));
+  [panelSingle, panelBulk, panelHistory, panelPrint].forEach(p => p.classList.remove('active'));
+  tab.classList.add('active');
+  panel.classList.add('active');
+}
+tabSingle.addEventListener('click',  () => switchTab(tabSingle,  panelSingle));
+tabBulk.addEventListener('click',    () => switchTab(tabBulk,    panelBulk));
+tabHistory.addEventListener('click', () => { switchTab(tabHistory, panelHistory); renderHistory(); });
+tabPrint.addEventListener('click',   () => { switchTab(tabPrint,   panelPrint);   syncPrintPanel(); });
+
+/* ─── URL BAR ─────────────────────────────────────────────────── */
+urlGoBtn.addEventListener('click', loadUrl);
+urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadUrl(); });
+
+function loadUrl() {
+  const url = urlInput.value.trim();
+  if (!url) return;
+  if (!url.includes('novelbin.com')) {
+    showStatus(statusSingle, '⚠ Must be a novelbin.com URL.', 'error', true);
+    switchTab(tabSingle, panelSingle);
+    return;
+  }
+  footerText.textContent = `Loaded: ${trunc(url, 55)}`;
+  switchTab(tabSingle, panelSingle);
+  showStatus(statusSingle, '✓ URL set — click Extract to scrape this chapter.', 'info', true);
+}
+
+/* ─── HIDDEN IFRAME (canvas) SCRAPING ─────────────────────────── */
+// We load the chapter page into a sandboxed hidden iframe, then read
+// the DOM via contentDocument once it finishes loading.
+// NOTE: works only when served from a local/same-origin server, OR
+//       when the target site does not block framing (X-Frame-Options).
+//       For novelbin.com a CORS proxy is used as a fallback.
+
+const PROXY = 'https://corsproxy.io/?';
+
+async function fetchPageHtml(url) {
+  // 1st try: direct fetch (works when no CORS issue)
+  try {
+    const r = await fetch(url, { credentials: 'omit', cache: 'no-store' });
+    if (r.ok) return await r.text();
+  } catch {}
+  // 2nd try: CORS proxy
+  try {
+    const r = await fetch(PROXY + encodeURIComponent(url), { cache: 'no-store' });
+    if (r.ok) return await r.text();
+  } catch {}
+  throw new Error('Could not fetch the page. Try installing the companion browser extension for direct DOM access.');
+}
+
+function extractFromHtml(html, url) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  const titleEl = doc.querySelector('.chr-text');
+  const title = titleEl ? titleEl.textContent.trim() : '';
+
+  const contentEl = doc.querySelector('#chr-content');
+  if (!contentEl) return { title, content: '', error: 'Chapter content not found.' };
+
+  const clone = contentEl.cloneNode(true);
+  clone.querySelectorAll('script,style,.pubfuture,[id^="pf-"],hr').forEach(el => el.remove());
+
+  const lines = [];
+  clone.querySelectorAll('h4, p').forEach(el => {
+    const t = el.textContent.trim();
+    if (t) lines.push(t);
+  });
+  const content = lines.join('\n\n');
+  if (!content) return { title, content: '', error: 'No text content found.' };
+  return { title, content, error: null };
+}
+
+function getNextUrlFromHtml(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const btn = doc.getElementById('next_chap');
+  if (!btn) return { nextUrl: null, isLast: true };
+  const href = btn.getAttribute('href') || '';
+  const isDisabled = btn.hasAttribute('disabled');
+  const isNull = href.endsWith('/null') || href === '' || isDisabled;
+  if (isNull) return { nextUrl: null, isLast: true };
+  // make absolute
+  try {
+    const abs = new URL(href, 'https://novelbin.com').href;
+    return { nextUrl: abs, isLast: false };
+  } catch {
+    return { nextUrl: href, isLast: false };
+  }
+}
+
+/* ─── SINGLE EXTRACT ──────────────────────────────────────────── */
+extractBtn.addEventListener('click', async () => {
+  const url = urlInput.value.trim() || window.location.href;
+  if (!url.includes('novelbin.com')) {
+    showStatus(statusSingle, '⚠ Enter a novelbin.com chapter URL above first.', 'error', true);
+    return;
+  }
+  statusSingle.style.display = 'none';
+  loaderSingle.style.display = 'flex';
+  extractBtn.disabled = true;
+
+  try {
+    const html = await fetchPageHtml(url);
+    const { title, content, error } = extractFromHtml(html, url);
+
+    loaderSingle.style.display = 'none';
+    extractBtn.disabled = false;
+
+    if (error && !content) { showStatus(statusSingle, '✗ ' + error, 'error', true); return; }
+
+    singleText  = content;
+    singleTitle = title;
+    singleUrl   = url;
+
+    output.value = content;
+    chapterTitle.textContent = title;
+    const s = calcStats(content);
+    wordCount.textContent = s.words.toLocaleString() + ' words';
+    charCount.textContent = s.chars.toLocaleString() + ' chars';
+    copyBtn.disabled = printBtn.disabled = clearBtn.disabled = false;
+
+    // Auto-save
+    autoSaveHistory({ type: 'single', firstChapter: title, lastChapter: title, chaptersCount: 1, text: content, novelUrl: novelBaseUrl(url) });
+
+    showStatus(statusSingle, `✓ Extracted & saved — ${s.words.toLocaleString()} words`, 'success');
+    footerText.textContent = `Last extract: ${trunc(title, 50)}`;
+
+  } catch (err) {
+    loaderSingle.style.display = 'none';
+    extractBtn.disabled = false;
+    showStatus(statusSingle, '✗ ' + err.message, 'error', true);
+  }
+});
+
+copyBtn.addEventListener('click', async () => {
+  if (!singleText) return;
+  try { await navigator.clipboard.writeText(singleText); } catch { /* fallback */ }
+  showStatus(statusSingle, '✓ Copied to clipboard!', 'success');
+  copyBtn.textContent = '✓ Copied!';
+  setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 2000);
+});
+
+printBtn.addEventListener('click', () => {
+  if (!singleText) return;
+  setPrintData(singleText, singleTitle, null);
+  switchTab(tabPrint, panelPrint);
+  syncPrintPanel();
+});
+
+clearBtn.addEventListener('click', () => {
+  singleText = ''; singleTitle = ''; singleUrl = '';
+  output.value = '';
+  chapterTitle.textContent = '';
+  wordCount.textContent = '0 words';
+  charCount.textContent = '0 chars';
+  copyBtn.disabled = printBtn.disabled = clearBtn.disabled = true;
+  statusSingle.style.display = 'none';
+});
+
+/* ─── BULK SCRAPE ────────────────────────────────────────────────
+   Runs entirely via fetch (hidden canvas) — no tabs opened.
+────────────────────────────────────────────────────────────── */
+function setBulkUI(running) {
+  bulkRunning = running;
+  bulkStartBtn.disabled  = running;
+  bulkStopBtn.disabled   = !running;
+  if (running) {
+    progressWrap.classList.add('show');
+    progressLabel.textContent = 'SCRAPING...';
+    canvasIndicator.style.display = 'flex';
+  } else {
+    progressWrap.classList.remove('show');
+    canvasIndicator.style.display = 'none';
+  }
+}
+
+bulkStartBtn.addEventListener('click', async () => {
+  const url = urlInput.value.trim();
+  if (!url || !url.includes('novelbin.com')) {
+    showStatus(statusBulk, '⚠ Enter a novelbin.com chapter URL above first.', 'error', true);
+    return;
+  }
+  // reset
+  bulkStopped = false; bulkChunks = []; bulkFirstTitle = ''; bulkLastTitle = ''; bulkCount = 0;
+  bulkStartUrl = url;
+  bulkOutput.value = '';
+  bulkWordCount.textContent = '0 words'; bulkCharCount.textContent = '0 chars';
+  bulkCopyBtn.disabled = bulkPrintBtn.disabled = bulkClearBtn.disabled = true;
+  statusBulk.style.display = 'none';
+  bulkChapterTitle.textContent = '';
+  progressCurrent.textContent = 'Fetching first chapter…';
+  canvasIndicatorText.textContent = '0 chapters scraped';
+  setBulkUI(true);
+  showStatus(statusBulk, '🚀 Scraping via hidden canvas — no tab opened!', 'warn', true);
+  runBulkLoop(url);
+});
+
+bulkStopBtn.addEventListener('click', () => {
+  bulkStopped = true;
+  setBulkUI(false);
+  progressLabel.textContent = 'STOPPING…';
+  showStatus(statusBulk, '⏹ Stopping after current chapter…', 'warn', true);
+});
+
+async function runBulkLoop(startUrl) {
+  let currentUrl = startUrl;
+  while (!bulkStopped) {
+    try {
+      progressCurrent.textContent = `Fetching: ${trunc(currentUrl, 55)}`;
+      const html = await fetchPageHtml(currentUrl);
+      const { title, content, error } = extractFromHtml(html, currentUrl);
+
+      if (error && !content) {
+        setBulkUI(false);
+        showStatus(statusBulk, '✗ ' + error, 'error', true);
+        break;
+      }
+
+      bulkCount++;
+      bulkLastTitle = title;
+      if (!bulkFirstTitle) bulkFirstTitle = title;
+
+      const chunk = `\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
+      bulkChunks.push({ title, content, raw: chunk });
+
+      const fullText = bulkChunks.map(c => c.raw).join('');
+      bulkText = fullText;
+      bulkOutput.value = fullText;
+
+      const s = calcStats(fullText);
+      bulkWordCount.textContent = s.words.toLocaleString() + ' words';
+      bulkCharCount.textContent = s.chars.toLocaleString() + ' chars';
+      bulkCopyBtn.disabled = bulkPrintBtn.disabled = bulkClearBtn.disabled = false;
+      chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount === 1 ? '' : 's');
+      bulkChapterTitle.textContent = title;
+      canvasIndicatorText.textContent = `${bulkCount} chapter${bulkCount===1?'':'s'} scraped`;
+
+      const nav = getNextUrlFromHtml(html);
+      if (nav.isLast || !nav.nextUrl) {
+        setBulkUI(false);
+        bulkChapterTitle.textContent = `Done — ${bulkCount} chapters`;
+        autoSaveHistory({ type:'bulk', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: fullText, novelUrl: novelBaseUrl(startUrl) });
+        showStatus(statusBulk, `✓ Done — ${bulkCount} chapters scraped & saved!`, 'success', true);
+        footerText.textContent = `Bulk complete: ${bulkCount} chapters, ${s.words.toLocaleString()} words`;
+        break;
+      }
+
+      currentUrl = nav.nextUrl;
+      await sleep(800); // polite delay
+    } catch (err) {
+      setBulkUI(false);
+      showStatus(statusBulk, '✗ Fetch error: ' + err.message, 'error', true);
+      break;
+    }
+  }
+
+  if (bulkStopped && bulkText) {
+    autoSaveHistory({ type:'bulk', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(startUrl) });
+    showStatus(statusBulk, `⏹ Stopped — ${bulkCount} chapters saved to history.`, 'warn', true);
+  }
+}
+
+bulkCopyBtn.addEventListener('click', async () => {
+  if (!bulkText) return;
+  try { await navigator.clipboard.writeText(bulkText); } catch {}
+  showStatus(statusBulk, '✓ Copied!', 'success');
+  bulkCopyBtn.textContent = '✓ Copied!';
+  setTimeout(() => { bulkCopyBtn.textContent = '📋 Copy'; }, 2000);
+});
+
+bulkPrintBtn.addEventListener('click', () => {
+  if (!bulkText) return;
+  setPrintData(bulkText, `${bulkFirstTitle} → ${bulkLastTitle}`, bulkChunks);
+  switchTab(tabPrint, panelPrint);
+  syncPrintPanel();
+});
+
+bulkClearBtn.addEventListener('click', () => {
+  bulkText = ''; bulkChunks = []; bulkFirstTitle = ''; bulkLastTitle = ''; bulkCount = 0;
+  bulkOutput.value = '';
+  bulkChapterTitle.textContent = '';
+  bulkWordCount.textContent = '0 words'; bulkCharCount.textContent = '0 chars';
+  bulkCopyBtn.disabled = bulkPrintBtn.disabled = bulkClearBtn.disabled = true;
+  statusBulk.style.display = 'none';
+});
+
+/* ─── HISTORY ─────────────────────────────────────────────────── */
+function autoSaveHistory(entry) {
+  const words = entry.text.trim() ? entry.text.trim().split(/\s+/).length : 0;
+  const h = { ...entry, id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), timestamp: Date.now(), words, chars: entry.text.length };
+  delete h.text; // store metadata only (text is large — store separately)
+  const key = 'nb_text_' + h.id;
+  storageSet(key, entry.text);
+  let hist = storageGet(HISTORY_KEY, []);
+  hist.unshift(h);
+  if (hist.length > MAX_HISTORY) {
+    // clean up old text blobs
+    hist.slice(MAX_HISTORY).forEach(old => { try { localStorage.removeItem('nb_text_' + old.id); } catch {} });
+    hist = hist.slice(0, MAX_HISTORY);
+  }
+  storageSet(HISTORY_KEY, hist);
+}
+
+function loadHistText(id) {
+  return storageGet('nb_text_' + id, '');
+}
+
+subTabExtracts.addEventListener('click', () => {
+  activeHistSub = 'extracts';
+  subTabExtracts.classList.add('active'); subTabBookmarks.classList.remove('active');
+  extractsList.style.display = ''; bookmarksList.style.display = 'none';
+  renderExtracts();
+});
+subTabBookmarks.addEventListener('click', () => {
+  activeHistSub = 'bookmarks';
+  subTabBookmarks.classList.add('active'); subTabExtracts.classList.remove('active');
+  bookmarksList.style.display = ''; extractsList.style.display = 'none';
+  renderBookmarkLog();
+});
+
+async function renderExtracts() {
+  const hist = storageGet(HISTORY_KEY, []);
+  histCountBadge.textContent = hist.length;
+  if (hist.length === 0) {
+    extractsList.innerHTML = `<div class="hist-empty"><div class="icon">📭</div><div class="msg">No extracts yet.</div></div>`;
+    return;
+  }
+  extractsList.innerHTML = hist.map(e => {
+    const isBulk = e.type === 'bulk';
+    const range = isBulk && e.firstChapter !== e.lastChapter ? `${trunc(e.firstChapter,24)} → ${trunc(e.lastChapter,24)}` : trunc(e.firstChapter,48);
+    return `<div class="hc" data-id="${e.id}">
+      <div class="hc-top">
+        <div class="hc-title">${esc(range)}</div>
+        <div class="hc-ts" title="${fmtTimestamp(e.timestamp)}">${timeAgo(e.timestamp)}</div>
+      </div>
+      <div class="hc-meta">
+        <span class="hc-badge ${isBulk?'bulk':'single'}">${isBulk?'BULK':'SINGLE'}</span>
+        <span class="hc-badge auto">AUTO-SAVED</span>
+        <span class="hc-badge range">📑 ${e.chaptersCount} ch</span>
+        <span class="hc-badge words">✏ ${(e.words||0).toLocaleString()} w</span>
+      </div>
+      <div class="hc-actions">
+        <button class="hc-btn load"    data-id="${e.id}">📂 Load</button>
+        <button class="hc-btn recopy"  data-id="${e.id}">📋 Copy</button>
+        <button class="hc-btn printhc" data-id="${e.id}">🖨 Print</button>
+        <button class="hc-btn del"     data-id="${e.id}">🗑 Del</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+extractsList.addEventListener('click', async e => {
+  const btn = e.target.closest('.hc-btn');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const hist = storageGet(HISTORY_KEY, []);
+  const entry = hist.find(h => h.id === id);
+  if (!entry) return;
+
+  if (btn.classList.contains('load')) {
+    const text = loadHistText(id);
+    singleText = text; singleTitle = entry.firstChapter; singleUrl = entry.novelUrl||'';
+    output.value = text;
+    chapterTitle.textContent = entry.firstChapter;
+    const s = calcStats(text);
+    wordCount.textContent = s.words.toLocaleString() + ' words';
+    charCount.textContent = s.chars.toLocaleString() + ' chars';
+    copyBtn.disabled = printBtn.disabled = clearBtn.disabled = false;
+    switchTab(tabSingle, panelSingle);
+    showStatus(statusSingle, `✓ Loaded: ${trunc(entry.firstChapter, 40)}`, 'info');
+  }
+  if (btn.classList.contains('recopy')) {
+    const text = loadHistText(id);
+    try { await navigator.clipboard.writeText(text); showStatus(statusHistory, '✓ Copied!', 'success'); } catch { showStatus(statusHistory, '✗ Clipboard failed.', 'error'); }
+  }
+  if (btn.classList.contains('printhc')) {
+    const text = loadHistText(id);
+    setPrintData(text, entry.firstChapter, null);
+    switchTab(tabPrint, panelPrint); syncPrintPanel();
+  }
+  if (btn.classList.contains('del')) {
+    const updated = hist.filter(h => h.id !== id);
+    try { localStorage.removeItem('nb_text_' + id); } catch {}
+    storageSet(HISTORY_KEY, updated);
+    renderExtracts();
+    showStatus(statusHistory, '✓ Deleted.', 'info');
+  }
+});
+
+function renderBookmarkLog() {
+  const log = storageGet(BOOKMARK_LOG, []);
+  histCountBadge.textContent = log.length;
+  if (log.length === 0) {
+    bookmarksList.innerHTML = `<div class="hist-empty"><div class="icon">🔖</div><div class="msg">No bookmark updates yet.</div></div>`;
+    return;
+  }
+  bookmarksList.innerHTML = log.map(e => `
+    <div class="hc bm-card" data-id="${e.id}">
+      <div class="hc-top">
+        <div class="hc-title">${esc(trunc(e.chapterTitle||e.newTitle,46))}</div>
+        <div class="hc-ts">${timeAgo(e.timestamp)}</div>
+      </div>
+      <div class="hc-meta"><span class="hc-badge bm">🔖 BOOKMARK</span><span class="hc-badge auto">AUTO-UPDATED</span></div>
+      <div class="bm-detail">Was: ${esc(trunc(e.oldTitle,36))}<br><span style="color:var(--bookmark)">Now: ${esc(trunc(e.newTitle,36))}</span></div>
+      <div class="hc-actions"><button class="hc-btn del" data-id="${e.id}">🗑 Delete</button></div>
+    </div>`).join('');
+}
+
+bookmarksList.addEventListener('click', e => {
+  const btn = e.target.closest('.hc-btn.del');
+  if (!btn) return;
+  let log = storageGet(BOOKMARK_LOG, []);
+  log = log.filter(x => x.id !== btn.dataset.id);
+  storageSet(BOOKMARK_LOG, log);
+  renderBookmarkLog();
+  showStatus(statusHistory, '✓ Deleted.', 'info');
+});
+
+histClearAll.addEventListener('click', () => {
+  if (activeHistSub === 'extracts') {
+    if (!confirm('Clear all extract history?')) return;
+    const hist = storageGet(HISTORY_KEY, []);
+    hist.forEach(e => { try { localStorage.removeItem('nb_text_' + e.id); } catch {} });
+    storageSet(HISTORY_KEY, []);
+    renderExtracts();
+  } else {
+    if (!confirm('Clear all bookmark logs?')) return;
+    storageSet(BOOKMARK_LOG, []);
+    renderBookmarkLog();
+  }
+  showStatus(statusHistory, '✓ Cleared.', 'warn');
+});
+
+function renderHistory() {
+  if (activeHistSub === 'extracts') { extractsList.style.display=''; bookmarksList.style.display='none'; renderExtracts(); }
+  else { bookmarksList.style.display=''; extractsList.style.display='none'; renderBookmarkLog(); }
+}
+
+/* ─── PRINT SYSTEM ────────────────────────────────────────────── */
+function setPrintData(text, title, chunks) {
+  printData = { text, title, chunks };
+}
+
+function loadPrintConfig() {
+  const cfg = storageGet(PRINT_CFG_KEY, {});
+  if (cfg.fontSize)    fontSizeSlider.value     = cfg.fontSize;
+  if (cfg.lineHeight)  lineHeightSlider.value   = cfg.lineHeight;
+  if (cfg.fontFamily)  fontFamilySelect.value   = cfg.fontFamily;
+  if (cfg.pageBreak)   pageBreakSelect.value    = cfg.pageBreak;
+  if (cfg.twoCol  !== undefined) twoColToggle.checked   = cfg.twoCol;
+  if (cfg.titles  !== undefined) titlesToggle.checked   = cfg.titles;
+  if (cfg.dividers!== undefined) dividersToggle.checked = cfg.dividers;
+  updateSliderDisplays();
+}
+
+function savePrintConfig() {
+  storageSet(PRINT_CFG_KEY, {
+    fontSize:   fontSizeSlider.value,
+    lineHeight: lineHeightSlider.value,
+    fontFamily: fontFamilySelect.value,
+    pageBreak:  pageBreakSelect.value,
+    twoCol:     twoColToggle.checked,
+    titles:     titlesToggle.checked,
+    dividers:   dividersToggle.checked,
+  });
+}
+
+function updateSliderDisplays() {
+  fontSizeVal.textContent   = parseFloat(fontSizeSlider.value).toFixed(1)   + 'pt';
+  lineHeightVal.textContent = parseFloat(lineHeightSlider.value).toFixed(1);
+}
+
+[fontSizeSlider, lineHeightSlider].forEach(s => s.addEventListener('input', () => { updateSliderDisplays(); buildPreview(); savePrintConfig(); }));
+[fontFamilySelect, pageBreakSelect].forEach(s => s.addEventListener('change', () => { buildPreview(); savePrintConfig(); }));
+[twoColToggle, titlesToggle, dividersToggle].forEach(t => t.addEventListener('change', () => { buildPreview(); savePrintConfig(); }));
+
+function syncPrintPanel() {
+  if (!printData) {
+    printSourceInfo.innerHTML = '<strong>Print source:</strong> No text loaded — extract a chapter first.';
+    printPreview.textContent = 'No text to preview yet.';
+    doPrintBtn.disabled = true;
+    return;
+  }
+  const s = calcStats(printData.text);
+  printSourceInfo.innerHTML = `<strong>Print source:</strong> ${esc(trunc(printData.title, 60))} — ${s.words.toLocaleString()} words, ${s.chars.toLocaleString()} chars`;
+  doPrintBtn.disabled = false;
+  buildPreview();
+}
+
+function buildPreview() {
+  if (!printData) return;
+  const fontSize   = parseFloat(fontSizeSlider.value);
+  const lineHeight = parseFloat(lineHeightSlider.value);
+  const fontFamily = fontFamilySelect.value;
+  const twoCol     = twoColToggle.checked;
+  const titles     = titlesToggle.checked;
+  const dividers   = dividersToggle.checked;
+
+  // style the preview div
+  printPreview.style.fontSize   = fontSize + 'pt';
+  printPreview.style.lineHeight = lineHeight;
+  printPreview.style.fontFamily = fontFamily;
+  printPreview.classList.toggle('two-col', twoCol);
+
+  // Build preview HTML
+  if (printData.chunks && printData.chunks.length > 0) {
+    // Multi-chapter: render each chunk
+    let html = '';
+    printData.chunks.forEach((ch, i) => {
+      if (titles) html += `<div style="font-weight:bold;font-size:${(fontSize+1.5).toFixed(1)}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;">${esc(ch.title)}</div>`;
+      html += ch.content.split('\n\n').map(p => `<div style="margin-bottom:5pt;text-align:justify;">${esc(p)}</div>`).join('');
+      if (dividers && i < printData.chunks.length - 1) html += `<hr style="border:none;border-top:1px dashed #ccc;margin:10pt 0;" />`;
+    });
+    printPreview.innerHTML = html;
+  } else {
+    // Single block
+    const lines = printData.text.split('\n\n');
+    let html = '';
+    lines.forEach((line, i) => {
+      const isSep = line.includes('─────');
+      if (isSep && dividers) { html += `<hr style="border:none;border-top:1px dashed #ccc;margin:8pt 0;"/>`; return; }
+      if (isSep && !dividers) return;
+      html += `<div style="margin-bottom:5pt;text-align:justify;">${esc(line)}</div>`;
+    });
+    printPreview.innerHTML = html || esc(printData.text);
+  }
+
+  buildPrintRoot(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreakSelect.value);
+}
+
+function buildPrintRoot(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreak) {
+  // Build the actual printRoot DOM for @media print
+  printRoot.innerHTML = '';
+  printRoot.className = twoCol ? 'two-col' : '';
+
+  // CSS vars on printRoot for the @media print rules
+  printRoot.style.setProperty('--pf',  fontFamily);
+  printRoot.style.setProperty('--ps',  fontSize + 'pt');
+  printRoot.style.setProperty('--pl',  lineHeight);
+  printRoot.style.setProperty('--pb',  pageBreak);
+
+  if (printData.chunks && printData.chunks.length > 0) {
+    printData.chunks.forEach((ch, i) => {
+      const sec = document.createElement('div');
+      sec.className = 'print-chapter';
+
+      if (titles) {
+        const t = document.createElement('div');
+        t.className = 'print-chapter-title';
+        t.textContent = ch.title;
+        sec.appendChild(t);
+      }
+
+      ch.content.split('\n\n').forEach(para => {
+        const p = document.createElement('p');
+        p.className = 'print-para';
+        p.textContent = para;
+        sec.appendChild(p);
+      });
+
+      printRoot.appendChild(sec);
+
+      if (dividers && i < printData.chunks.length - 1) {
+        const hr = document.createElement('hr');
+        hr.className = 'print-divider';
+        printRoot.appendChild(hr);
+      }
+    });
+  } else {
+    const sec = document.createElement('div');
+    sec.className = 'print-chapter';
+    if (titles && printData.title) {
+      const t = document.createElement('div');
+      t.className = 'print-chapter-title';
+      t.textContent = printData.title;
+      sec.appendChild(t);
+    }
+    const lines = printData.text.split('\n\n');
+    lines.forEach(line => {
+      if (line.includes('─────')) {
+        if (dividers) { const hr = document.createElement('hr'); hr.className='print-divider'; sec.appendChild(hr); }
+        return;
+      }
+      const p = document.createElement('p');
+      p.className = 'print-para'; p.textContent = line;
+      sec.appendChild(p);
+    });
+    printRoot.appendChild(sec);
+  }
+}
+
+doPrintBtn.addEventListener('click', () => {
+  if (!printData) return;
+  showStatus(statusPrint, '🖨 Opening print dialog…', 'info');
+  // Give browser 150ms to render printRoot before triggering
+  setTimeout(() => {
+    window.print();
+    showStatus(statusPrint, '✓ Print dialog opened. Use your browser\'s print settings for margins & paper.', 'success', true);
+  }, 150);
+});
+
+/* ─── INIT ────────────────────────────────────────────────────── */
+loadPrintConfig();
+renderExtracts();
+
+// Pre-fill URL if we are on a novelbin page (when opened from bookmark/link)
+try {
+  if (window.location.href.includes('novelbin.com')) {
+    urlInput.value = window.location.href;
+  }
+} catch {}
+</script>
+
+</body>
+</html>
