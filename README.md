@@ -9,14 +9,7 @@
 ```
 novelbin/
 ├── extension/               # Chrome Extension (MV3)
-│   ├── manifest.json        # Extension manifest
-│   ├── background.js        # Service worker — bulk scraping, history, bookmarks
-│   ├── content.js           # Injected on chapter pages — DOM extraction
-│   ├── popup.html           # Extension popup UI
-│   ├── popup.js             # Popup logic
-│   ├── icon16.png
-│   ├── icon48.png
-│   └── icon128.png
+│   └── index.html           # Extension popup UI
 │
 ├── voxen-tts/               # VOXEN — Standalone TTS Reader
 │   └── index.html           # Single-file app (HTML + CSS + JS)
