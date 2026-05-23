@@ -494,6 +494,23 @@
       <button class="bue-fetch-btn" id="bueFetchBtn">⚡ Fetch Chapters</button>
     </div>
 
+    <!-- Paste HTML fallback — shown after a fetch failure -->
+    <div id="buePastePanel" style="display:none; margin-top:10px; border:1px solid rgba(245,158,11,.25); border-radius:8px; padding:12px; background:rgba(245,158,11,.04);">
+      <div style="font-family:var(--mono); font-size:10px; color:var(--accent4); letter-spacing:1px; margin-bottom:6px;">📋 PASTE PAGE SOURCE FALLBACK</div>
+      <div style="font-family:var(--mono); font-size:10px; color:var(--muted); line-height:1.7; margin-bottom:8px;">
+        Auto-fetch blocked? Do this instead:<br>
+        1. Open the novel page in a new tab<br>
+        2. Press <span style="color:var(--text)">Ctrl+U</span> (or right-click → View Page Source)<br>
+        3. Press <span style="color:var(--text)">Ctrl+A</span> then <span style="color:var(--text)">Ctrl+C</span> to copy all<br>
+        4. Paste it below and click Extract
+      </div>
+      <textarea id="bueHtmlPaste" placeholder="Paste full page source here…" spellcheck="false" style="width:100%; height:90px; resize:vertical; background:var(--surface3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:10px; padding:8px; box-sizing:border-box; outline:none;"></textarea>
+      <div style="display:flex; gap:8px; margin-top:7px; align-items:center;">
+        <button class="bue-fetch-btn" id="bueExtractPasteBtn" style="padding:6px 14px;">⚡ Extract from Pasted HTML</button>
+        <button id="buePasteClose" style="padding:5px 10px; border-radius:5px; border:1px solid var(--border); background:transparent; color:var(--muted); font-family:var(--ff); font-size:11px; cursor:pointer;">✕ Close</button>
+      </div>
+    </div>
+
     <div class="bue-loader" id="bueLoader">
       <div class="bue-spinner"></div>
       <span class="bue-loader-text">FETCHING CHAPTER LIST…</span>
@@ -833,11 +850,26 @@ clearUrlListBtn.addEventListener('click', () => {
 });
 
 /* ── FETCH + EXTRACT ── */
-const PROXY = 'https://corsproxy.io/?';
+const CORS_PROXIES = [
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://thingproxy.freeboard.io/fetch/${u}`,
+  u => `https://cors-anywhere.herokuapp.com/${u}`,
+];
 async function fetchPageHtml(url) {
-  try { const r = await fetch(url, { credentials: 'omit', cache: 'no-store' }); if (r.ok) return await r.text(); } catch {}
-  try { const r = await fetch(PROXY + encodeURIComponent(url), { cache: 'no-store' }); if (r.ok) return await r.text(); } catch {}
-  throw new Error('Could not fetch the page. Try installing the companion browser extension for direct DOM access.');
+  // Direct fetch first (no proxy overhead, works for same-origin or open CORS endpoints)
+  try {
+    const r = await fetch(url, { credentials: 'omit', cache: 'no-store' });
+    if (r.ok) { const t = await r.text(); if (t && t.length > 500) return t; }
+  } catch {}
+  // Try each proxy in turn; stop at the first that returns real content
+  for (const makeProxy of CORS_PROXIES) {
+    try {
+      const r = await fetch(makeProxy(url), { cache: 'no-store' });
+      if (r.ok) { const t = await r.text(); if (t && t.length > 500) return t; }
+    } catch {}
+  }
+  throw new Error('Could not fetch the page — all proxies failed. If this keeps happening, try opening the novel page in a new tab first, then paste the URL here.');
 }
 function extractFromHtml(html, url) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -919,9 +951,9 @@ function bueExtractChaptersFromHtml(html, novelSlug) {
  
   // ── Method 2: NovelBin duplicates the list inside a <template> tag ─
   //   (used by their JS to re-render rows — same data, different DOM node)
-  //   We skip this when Method 1 already found results to avoid duplicates.
-  if (chapters.length === 0) {
-    const tmpl = doc.querySelector('[data-chapter-item-template]');
+  //   Always run this — it may contain more chapters than the rendered grid.
+  {
+    const tmpl = doc.querySelector('[data-chapter-item-template], [data-first-chapter-template]');
     if (tmpl) {
       const host = document.createElement('ul');
       host.innerHTML = tmpl.innerHTML;
@@ -967,8 +999,12 @@ function bueGetNovelTitle(html) {
 
 function bueGetNovelId(html) {
   // NovelBin sometimes embeds the novelId in script tags or data attrs
+  // Try numeric ID first
   const m = html.match(/novelId['":\s]+(\d+)/i) || html.match(/data-novel-id=['""](\d+)['""]/) || html.match(/"novel_id"\s*:\s*"?(\d+)"?/);
-  return m ? m[1] : null;
+  if (m) return m[1];
+  // Also try slug-based novel ID (e.g. data-novel-id="pioneer-lord-i-have-conquering-system")
+  const ms = html.match(/data-novel-id=["']([\w-]+)["']/) || html.match(/novel_id["'\s:,]+["']([\w-]+)["']/);
+  return ms ? ms[1] : null;
 }
 
 function bueSlugFromUrl(url) {
@@ -1011,9 +1047,10 @@ async function bueFetchChapterList(rawUrl) {
   }
  
   // 4. AJAX endpoints for novels with very large chapter counts
-  //    (NovelBin sometimes lazy-loads the full list via these endpoints)
+  //    (NovelBin lazy-loads the full list via these endpoints — always try
+  //     in case the inline HTML only has a partial chapter list)
   const novelId = bueGetNovelId(html);
-  if (novelId && results.length === 0) {
+  if (novelId) {
     const ajaxUrls = [
       `https://novelbin.com/ajax/chapter-option?novelId=${novelId}`,
       `https://novelbin.com/ajax/chapter-archive?novelId=${novelId}`,
@@ -1025,24 +1062,10 @@ async function bueFetchChapterList(rawUrl) {
         if (fromAjax.length > results.length) {
           results = fromAjax;
         }
-        if (results.length > 0) break;
+        // If AJAX gave more chapters, we're done
+        if (results.length > 0 && fromAjax.length >= results.length) break;
       } catch { /* ignore individual AJAX failures */ }
     }
-  }
- 
-  // 5. Last-resort: re-try through corsproxy explicitly
-  if (results.length === 0) {
-    try {
-      const proxyHtml = await fetch(
-        'https://corsproxy.io/?' + encodeURIComponent(baseUrl),
-        { cache: 'no-store' }
-      ).then(r => r.text());
-      const fromProxy = bueExtractChaptersFromHtml(proxyHtml, slug);
-      if (fromProxy.length > 0) {
-        results    = fromProxy;
-        novelTitle = novelTitle || bueGetNovelTitle(proxyHtml) || slug;
-      }
-    } catch { /* ignore */ }
   }
  
   return { chapters: results, novelTitle, slug };
@@ -1132,6 +1155,7 @@ bueFetchBtn.addEventListener('click', async () => {
   bueLoader.style.display = 'flex';
   bueFetchBtn.disabled = true;
   statusBue.style.display = 'none';
+  document.getElementById('buePastePanel').style.display = 'none';
 
   try {
     const { chapters, novelTitle, slug } = await bueFetchChapterList(raw);
@@ -1141,8 +1165,9 @@ bueFetchBtn.addEventListener('click', async () => {
     if (chapters.length === 0) {
       showStatus(statusBue,
         '⚠ No chapters found on that page. NovelBin may require login or load chapters via JavaScript. ' +
-        'Try the browser extension or manually paste the chapter URLs in Bulk → Custom URL List.',
+        'Try pasting the page source using the fallback below.',
         'warn', true);
+      document.getElementById('buePastePanel').style.display = 'block';
       return;
     }
 
@@ -1162,8 +1187,48 @@ bueFetchBtn.addEventListener('click', async () => {
   } catch(err) {
     bueLoader.style.display = 'none';
     bueFetchBtn.disabled = false;
-    showStatus(statusBue, '✗ ' + err.message, 'error', true);
+    showStatus(statusBue, '✗ ' + err.message + ' — Try the paste fallback below.', 'error', true);
+    document.getElementById('buePastePanel').style.display = 'block';
   }
+});
+
+// ── Paste HTML fallback handlers ──────────────────────────────────────
+document.getElementById('buePasteClose').addEventListener('click', () => {
+  document.getElementById('buePastePanel').style.display = 'none';
+});
+
+document.getElementById('bueExtractPasteBtn').addEventListener('click', () => {
+  const html = document.getElementById('bueHtmlPaste').value.trim();
+  if (!html) {
+    showStatus(statusBue, '⚠ Paste the page source first.', 'error', true);
+    return;
+  }
+  // Try to extract novel slug from pasted URL input or from HTML itself
+  const rawUrl  = novelPageInput.value.trim();
+  const slug    = bueSlugFromUrl(rawUrl) || (html.match(/\/b\/([\w-]+)\//) || [])[1] || '';
+  const chapters = bueExtractChaptersFromHtml(html, slug);
+  const novelTitle = bueGetNovelTitle(html) || slug || 'Unknown Novel';
+
+  if (chapters.length === 0) {
+    showStatus(statusBue, '⚠ No chapters found in pasted HTML. Make sure you copied the full page source (Ctrl+U → Ctrl+A → Ctrl+C).', 'error', true);
+    return;
+  }
+
+  bueAllChapters = chapters;
+  bueResults.classList.remove('visible');
+  bueNovelTitle.textContent = novelTitle;
+  bueTotalBadge.textContent = chapters.length + ' chapters';
+  bueNovelBadge.textContent = slug || 'novel';
+  bueRangeFrom.max = chapters.length;
+  bueRangeTo.max   = chapters.length;
+  bueRangeActive   = { from: 1, to: Infinity };
+  bueOrder         = 'asc';
+  bueOrderSeg.querySelectorAll('.bue-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.order === 'asc'));
+  applyBueFilters();
+  bueResults.classList.add('visible');
+  document.getElementById('buePastePanel').style.display = 'none';
+  showStatus(statusBue, `✓ Extracted ${chapters.length} chapters from pasted source for "${novelTitle}".`, 'success');
+  footerText.textContent = `URL Extractor: ${chapters.length} chapters from "${trunc(novelTitle,35)}"`;
 });
 
 novelPageInput.addEventListener('keydown', e => { if (e.key === 'Enter') bueFetchBtn.click(); });
