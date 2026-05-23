@@ -882,53 +882,80 @@ function bueExtractChaptersFromHtml(html, novelSlug) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const chapters = [];
   const seen = new Set();
-
-  // Method 1: standard chapter list ul
-  const listEls = doc.querySelectorAll(
-    '#ul-chapter-list a, .list-chapter a, #list-chapter a, .tab-content a[href*="/b/"]'
-  );
-  listEls.forEach(a => {
-    const href = a.getAttribute('href') || '';
-    if (!href.includes('/b/') || href.endsWith('/b/') || href.endsWith('/null')) return;
+ 
+  function addLink(a) {
+    // Always strip the URL fragment (#...) before processing
+    const href = (a.getAttribute('href') || '').split('#')[0].trim();
+    if (!href || !href.includes('/b/') || href.endsWith('/b/') || href === '/b/null' || href.endsWith('/null')) return;
     let url;
     try { url = new URL(href, 'https://novelbin.com').href; } catch { return; }
     if (seen.has(url)) return;
     seen.add(url);
-    const title = (a.getAttribute('title') || a.textContent || '').trim().replace(/\s+/g,' ') || url.split('/').pop();
+    // Prefer the title="" attribute; fall back to inner text of .nchr-text / .chapter-title spans
+    const titleAttr  = (a.getAttribute('title') || '').trim();
+    const innerSpan  = a.querySelector('.nchr-text, .chapter-title');
+    const innerText  = (innerSpan ? innerSpan.textContent : a.textContent || '').trim().replace(/\s+/g, ' ');
+    const title      = titleAttr || innerText || url.split('/').pop();
     chapters.push({ title, url });
-  });
-
-  // Method 2: any anchor on the page with the novel slug + chapter pattern
+  }
+ 
+  // ── Method 1: primary NovelBin chapter-list selectors ─────────────
+  // NovelBin renders chapters inside  ul.list-chapter > li > a
+  // wrapped in .chapter-archive-grid > .chapter-archive-row > .chapter-archive-column
+  // (or directly inside #list-chapter).  Try the most specific first.
+  const PRIMARY_SELECTORS = [
+    '.chapter-archive-column .list-chapter a',
+    '.chapter-archive-grid  .list-chapter a',
+    '#list-chapter          .list-chapter a',
+    '.list-chapter a',
+    '#ul-chapter-list a',
+  ];
+  for (const sel of PRIMARY_SELECTORS) {
+    const els = doc.querySelectorAll(sel);
+    if (els.length === 0) continue;
+    els.forEach(addLink);
+    if (chapters.length > 0) break; // stop at first selector that yields results
+  }
+ 
+  // ── Method 2: NovelBin duplicates the list inside a <template> tag ─
+  //   (used by their JS to re-render rows — same data, different DOM node)
+  //   We skip this when Method 1 already found results to avoid duplicates.
+  if (chapters.length === 0) {
+    const tmpl = doc.querySelector('[data-chapter-item-template]');
+    if (tmpl) {
+      const host = document.createElement('ul');
+      host.innerHTML = tmpl.innerHTML;
+      host.querySelectorAll('a[href]').forEach(addLink);
+    }
+  }
+ 
+  // ── Method 3: generic slug-pattern fallback ────────────────────────
   if (chapters.length === 0) {
     const slug = novelSlug || '';
-    const pattern = slug ? new RegExp('/b/' + slug.replace(/[-]/g,'[\\-]') + '/', 'i') : /\/b\/[^/]+\/chapter/i;
+    // Build a pattern that matches /b/<slug>/anything (but not bare /b/<slug>)
+    const escapedSlug = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = slug
+      ? new RegExp('/b/' + escapedSlug + '/[^#"\'\\s]+')
+      : /\/b\/[^/]+\/[^#"'\s]+/;
     doc.querySelectorAll('a[href]').forEach(a => {
-      const href = a.getAttribute('href') || '';
+      const href = (a.getAttribute('href') || '').split('#')[0].trim();
       if (!pattern.test(href)) return;
-      if (href.includes('#') && !href.includes('/chapter')) return;
-      let url;
-      try { url = new URL(href, 'https://novelbin.com').href; } catch { return; }
-      if (seen.has(url)) return;
-      seen.add(url);
-      const title = (a.getAttribute('title') || a.textContent || '').trim().replace(/\s+/g,' ') || url.split('/').pop();
-      chapters.push({ title, url });
+      addLink(a);
     });
   }
-
-  // Method 3: parse <option value="..."> (some AJAX responses)
+ 
+  // ── Method 4: <option value="..."> (some AJAX responses) ──────────
   if (chapters.length === 0) {
     doc.querySelectorAll('option[value]').forEach(opt => {
-      const href = opt.getAttribute('value') || '';
+      const href = (opt.getAttribute('value') || '').split('#')[0].trim();
       if (!href.includes('/b/')) return;
-      let url;
-      try { url = new URL(href, 'https://novelbin.com').href; } catch { return; }
-      if (seen.has(url)) return;
-      seen.add(url);
-      const title = opt.textContent.trim() || url.split('/').pop();
-      chapters.push({ title, url });
+      const fakeA = document.createElement('a');
+      fakeA.href = href;
+      fakeA.textContent = opt.textContent.trim();
+      addLink(fakeA);
     });
   }
-
+ 
   return chapters;
 }
 
@@ -952,30 +979,41 @@ function bueSlugFromUrl(url) {
 }
 
 async function bueFetchChapterList(rawUrl) {
-  // Normalise URL — strip fragment
+  // 1. Always strip the URL fragment — NovelBin renders chapters server-side,
+  //    the #tab-chapters-title fragment is only meaningful in-browser.
   let baseUrl = rawUrl.trim().replace(/#.*$/, '');
   if (!baseUrl.startsWith('http')) baseUrl = 'https://' + baseUrl;
-  const slug = bueSlugFromUrl(baseUrl);
-
-  const results = [];
-  let novelTitle = '';
-  let html = '';
-
-  // Step 1 — fetch the main novel page
+ 
+  // 2. Normalise to the canonical novel page: /b/<slug>  (drop /chapter-xxx etc.)
   try {
-    html = await fetchPageHtml(baseUrl);
+    const u    = new URL(baseUrl);
+    const segs = u.pathname.split('/').filter(Boolean); // ['b', 'novel-slug', ...]
+    if (segs.length >= 2) {
+      u.pathname = '/' + segs[0] + '/' + segs[1];      // keep only /b/<slug>
+      u.search   = '';
+      baseUrl    = u.origin + u.pathname;
+    }
+  } catch { /* leave baseUrl as-is */ }
+ 
+  const slug = bueSlugFromUrl(baseUrl);
+  let results    = [];
+  let novelTitle = '';
+  let html       = '';
+ 
+  // 3. Fetch the main novel page — chapters are fully server-rendered inline
+  try {
+    html       = await fetchPageHtml(baseUrl);
     novelTitle = bueGetNovelTitle(html) || slug;
     const fromPage = bueExtractChaptersFromHtml(html, slug);
     fromPage.forEach(c => results.push(c));
-  } catch(e) {
+  } catch (e) {
     throw new Error('Failed to fetch novel page: ' + e.message);
   }
-
-  // Step 2 — try the AJAX chapter-list endpoint (NovelBin loads chapters via AJAX)
-  // Endpoint: /ajax/chapter-option?novelId=<id>
-  // Also try: /ajax/chapter-archive?novelId=<id>
+ 
+  // 4. AJAX endpoints for novels with very large chapter counts
+  //    (NovelBin sometimes lazy-loads the full list via these endpoints)
   const novelId = bueGetNovelId(html);
-  if (novelId) {
+  if (novelId && results.length === 0) {
     const ajaxUrls = [
       `https://novelbin.com/ajax/chapter-option?novelId=${novelId}`,
       `https://novelbin.com/ajax/chapter-archive?novelId=${novelId}`,
@@ -985,23 +1023,28 @@ async function bueFetchChapterList(rawUrl) {
         const ajaxHtml = await fetchPageHtml(aUrl);
         const fromAjax = bueExtractChaptersFromHtml(ajaxHtml, slug);
         if (fromAjax.length > results.length) {
-          results.length = 0;
-          fromAjax.forEach(c => results.push(c));
+          results = fromAjax;
         }
-        if (fromAjax.length > 0) break;
-      } catch {}
+        if (results.length > 0) break;
+      } catch { /* ignore individual AJAX failures */ }
     }
   }
-
-  // Step 3 — try fetching the #tab-chapters-title page variant
+ 
+  // 5. Last-resort: re-try through corsproxy explicitly
   if (results.length === 0) {
     try {
-      const tabHtml = await fetchPageHtml(baseUrl + '#tab-chapters-title');
-      const fromTab = bueExtractChaptersFromHtml(tabHtml, slug);
-      fromTab.forEach(c => results.push(c));
-    } catch {}
+      const proxyHtml = await fetch(
+        'https://corsproxy.io/?' + encodeURIComponent(baseUrl),
+        { cache: 'no-store' }
+      ).then(r => r.text());
+      const fromProxy = bueExtractChaptersFromHtml(proxyHtml, slug);
+      if (fromProxy.length > 0) {
+        results    = fromProxy;
+        novelTitle = novelTitle || bueGetNovelTitle(proxyHtml) || slug;
+      }
+    } catch { /* ignore */ }
   }
-
+ 
   return { chapters: results, novelTitle, slug };
 }
 
