@@ -10,19 +10,16 @@
   <style id="printStyles">
     @media print {
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      body > *:not(#printRoot) { display: none !important; }
-      #printRoot {
-        display: block !important; position: static !important; width: 100% !important;
-        background: #fff !important; color: #000 !important;
-        font-family: var(--pf, 'Georgia, serif') !important; font-size: var(--ps, 11pt) !important;
-        line-height: var(--pl, 1.6) !important; padding: 0 !important; margin: 0 !important;
-      }
-      #printRoot .print-chapter { page-break-after: var(--pb, auto); margin-bottom: 0; }
-      #printRoot .print-chapter-title { font-family: var(--pf, 'Georgia, serif') !important; font-size: calc(var(--ps, 11pt) + 2pt) !important; font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 4pt; margin-bottom: 10pt; }
-      #printRoot .print-para { margin-bottom: 6pt; text-align: justify; }
-      #printRoot .print-divider { border: none; border-top: 1px dashed #999; margin: 10pt 0; }
-      #printRoot.two-col { column-count: 2; column-gap: 20pt; }
-      #printRoot.two-col .print-chapter-title { column-span: all; }
+      html, body { display: block !important; overflow: visible !important; height: auto !important; min-height: 0 !important; background: #fff !important; }
+      body > * { display: none !important; }
+      #printContainer { display: block !important; position: static !important; width: 100% !important; height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; padding: 0 !important; margin: 0 !important; }
+      #printPreview { display: block !important; width: 100% !important; height: auto !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; color: #000 !important; background: #fff !important; white-space: normal !important; border: none !important; border-radius: 0 !important; }
+      #printPreview .pc { page-break-after: var(--pb, auto); }
+      #printPreview .pc-title { font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 4pt; margin-bottom: 8pt; }
+      #printPreview .pp { margin-bottom: 5pt; text-align: justify; }
+      #printPreview hr { border: none; border-top: 1px dashed #ccc; margin: 8pt 0; }
+      #printPreview.two-col { column-count: 2; column-gap: 20pt; }
+      #printPreview.two-col .pc-title { column-span: all; }
     }
   </style>
 
@@ -357,14 +354,6 @@
     .toggle input:checked ~ .toggle-track ~ .toggle-thumb { transform: translateX(16px); background: var(--accent2); }
     .print-source-info { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--accent2); border-radius: 6px; padding: 8px 12px; font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: .5px; }
     .print-source-info strong { color: var(--text); }
-    .print-edit-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
-    .print-edit-label  { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
-    .print-edit-hint   { font-family: var(--mono); font-size: 9px; color: var(--accent2); letter-spacing: .5px; }
-    .print-reset-btn   { padding: 2px 9px; border-radius: 4px; border: 1px solid var(--accent3); background: rgba(255,60,172,.07); color: var(--accent3); font-family: var(--ff); font-size: 10px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; cursor: pointer; transition: all .2s; }
-    .print-reset-btn:hover { background: rgba(255,60,172,.18); }
-    textarea#printEditArea { width: 100%; height: 180px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 11px; line-height: 1.7; padding: 10px 12px; resize: vertical; outline: none; transition: border-color .2s; }
-    textarea#printEditArea:focus { border-color: rgba(0,229,255,.35); }
-    textarea#printEditArea::placeholder { color: var(--muted); font-style: italic; }
 
     /* FOOTER */
     #appFooter { position: relative; z-index: 10; flex-shrink: 0; padding: 6px 20px 8px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); }
@@ -377,7 +366,9 @@
 <body>
 
 <iframe id="scrapeFrame" style="position:fixed;top:-9999px;left:-9999px;width:1200px;height:900px;border:none;visibility:hidden;pointer-events:none;z-index:-1;" sandbox="allow-same-origin allow-scripts" referrerpolicy="no-referrer"></iframe>
-<div id="printRoot"></div>
+<div id="printContainer">
+  <div id="printPreview" style="display:none;"></div>
+</div>
 
 <div id="appHeader">
   <div class="logo-mark">N</div>
@@ -601,18 +592,8 @@
       <strong>Print source:</strong> No text loaded — extract a chapter first, then configure here.
     </div>
     <div>
-      <div class="print-edit-header">
-        <span class="print-edit-label">✏ Editable Text</span>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="print-edit-hint" id="printEditHint"></span>
-          <button class="print-reset-btn" id="printResetBtn" style="display:none;">↺ Reset</button>
-        </div>
-      </div>
-      <textarea id="printEditArea" placeholder="Extract a chapter first — text will appear here and can be freely edited before printing."></textarea>
-    </div>
-    <div>
       <div class="section-label">Live Preview (approx.)</div>
-      <div class="print-preview-wrap"><div id="printPreview">No text to preview yet.</div></div>
+      <div class="print-preview-wrap"><div id="previewDisplay">No text to preview yet.</div></div>
     </div>
     <div class="print-controls">
       <div class="print-control-group">
@@ -728,9 +709,7 @@ const subTabExtracts    = document.getElementById('subTabExtracts');
 const subTabBookmarks   = document.getElementById('subTabBookmarks');
 const printSourceInfo   = document.getElementById('printSourceInfo');
 const printPreview      = document.getElementById('printPreview');
-const printEditArea     = document.getElementById('printEditArea');
-const printResetBtn     = document.getElementById('printResetBtn');
-const printEditHint     = document.getElementById('printEditHint');
+const previewDisplay    = document.getElementById('previewDisplay');
 const fontSizeSlider    = document.getElementById('fontSizeSlider');
 const fontSizeVal       = document.getElementById('fontSizeVal');
 const lineHeightSlider  = document.getElementById('lineHeightSlider');
@@ -743,7 +722,6 @@ const dividersToggle    = document.getElementById('dividersToggle');
 const doPrintBtn        = document.getElementById('doPrintBtn');
 const statusPrint       = document.getElementById('statusPrint');
 const footerText        = document.getElementById('footerText');
-const printRoot         = document.getElementById('printRoot');
 const modeContinuous    = document.getElementById('modeContinuous');
 const modeCustomUrls    = document.getElementById('modeCustomUrls');
 const urlListPanel      = document.getElementById('urlListPanel');
@@ -1484,9 +1462,7 @@ histClearAll.addEventListener('click', () => {
 function renderHistory() { if (activeHistSub === 'extracts') { extractsList.style.display = ''; bookmarksList.style.display = 'none'; renderExtracts(); } else { bookmarksList.style.display = ''; extractsList.style.display = 'none'; renderBookmarkLog(); } }
 
 /* ── PRINT ── */
-function setPrintData(text, title, chunks) {
-  printData = { text, title, chunks, _origText: text, _origChunks: chunks || null };
-}
+function setPrintData(text, title, chunks) { printData = { text, title, chunks }; }
 function loadPrintConfig() {
   const cfg = storageGet(PRINT_CFG_KEY, {});
   if (cfg.fontSize)   fontSizeSlider.value   = cfg.fontSize;
@@ -1504,46 +1480,11 @@ function updateSliderDisplays() { fontSizeVal.textContent = parseFloat(fontSizeS
 [fontFamilySelect,pageBreakSelect].forEach(s => s.addEventListener('change', () => { buildPreview(); savePrintConfig(); }));
 [twoColToggle,titlesToggle,dividersToggle].forEach(t => t.addEventListener('change', () => { buildPreview(); savePrintConfig(); }));
 function syncPrintPanel() {
-  if (!printData) {
-    printSourceInfo.innerHTML = '<strong>Print source:</strong> No text loaded — extract a chapter first.';
-    printPreview.textContent = 'No text to preview yet.';
-    printEditArea.value = '';
-    printEditHint.textContent = '';
-    printResetBtn.style.display = 'none';
-    doPrintBtn.disabled = true;
-    return;
-  }
+  if (!printData) { printSourceInfo.innerHTML = '<strong>Print source:</strong> No text loaded — extract a chapter first.'; previewDisplay.textContent = 'No text to preview yet.'; printPreview.innerHTML = ''; printPreview.style.display = 'none'; doPrintBtn.disabled = true; return; }
   const s = calcStats(printData.text);
   printSourceInfo.innerHTML = `<strong>Print source:</strong> ${esc(trunc(printData.title,60))} — ${s.words.toLocaleString()} words, ${s.chars.toLocaleString()} chars`;
-  // Populate textarea with full flat text (original)
-  if (!printData._origText) printData._origText = printData.text;
-  printEditArea.value = printData.text;
-  updatePrintEditHint();
-  doPrintBtn.disabled = false;
-  buildPreview();
+  doPrintBtn.disabled = false; buildPreview();
 }
-function updatePrintEditHint() {
-  if (!printData) return;
-  const changed = printData.text !== printData._origText;
-  printEditHint.textContent = changed ? '● edited' : '';
-  printResetBtn.style.display = changed ? '' : 'none';
-}
-printEditArea.addEventListener('input', () => {
-  if (!printData) return;
-  // Flatten chunks into edited text; editing clears chunk structure for simplicity
-  printData.text = printEditArea.value;
-  printData.chunks = null; // switch to flat mode so buildPreview uses edited text
-  updatePrintEditHint();
-  buildPreview();
-});
-printResetBtn.addEventListener('click', () => {
-  if (!printData || !printData._origText) return;
-  printData.text = printData._origText;
-  printData.chunks = printData._origChunks || null;
-  printEditArea.value = printData._origText;
-  updatePrintEditHint();
-  buildPreview();
-});
 // Split text into paragraphs robustly — handles \n\n, single \n, and mixed
 function splitParas(text) {
   if (!text) return [];
@@ -1557,54 +1498,46 @@ function splitParas(text) {
 
 function buildPreview() {
   if (!printData) return;
-  const fontSize = parseFloat(fontSizeSlider.value), lineHeight = parseFloat(lineHeightSlider.value), fontFamily = fontFamilySelect.value, twoCol = twoColToggle.checked, titles = titlesToggle.checked, dividers = dividersToggle.checked;
-  printPreview.style.fontSize = fontSize+'pt'; printPreview.style.lineHeight = lineHeight; printPreview.style.fontFamily = fontFamily; printPreview.classList.toggle('two-col', twoCol);
+  const fontSize = parseFloat(fontSizeSlider.value), lineHeight = parseFloat(lineHeightSlider.value),
+        fontFamily = fontFamilySelect.value, twoCol = twoColToggle.checked,
+        titles = titlesToggle.checked, dividers = dividersToggle.checked,
+        pageBreak = pageBreakSelect.value;
+
+  // Shared style for both display and print target
+  function applyStyle(el) {
+    el.style.fontSize = fontSize+'pt'; el.style.lineHeight = lineHeight; el.style.fontFamily = fontFamily;
+    el.style.setProperty('--pb', pageBreak);
+    el.classList.toggle('two-col', twoCol);
+  }
+  applyStyle(previewDisplay);
+  applyStyle(printPreview);
+  printPreview.style.display = 'block';
+
+  let html = '';
   if (printData.chunks && printData.chunks.length > 0) {
-    let html = '';
     printData.chunks.forEach((ch, i) => {
-      if (titles) html += `<div style="font-weight:bold;font-size:${(fontSize+1.5).toFixed(1)}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;">${esc(ch.title)}</div>`;
+      html += `<div class="pc" style="${pageBreak==='always'?'page-break-after:always;':''}">`;
+      if (titles) html += `<div class="pc-title" style="font-weight:bold;font-size:${(fontSize+1.5).toFixed(1)}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;">${esc(ch.title)}</div>`;
       html += splitParas(ch.content).map(p => {
-        if (p.includes('─────')) return dividers ? `<hr style="border:none;border-top:1px dashed #ccc;margin:8pt 0;"/>` : '';
-        return `<div style="margin-bottom:5pt;text-align:justify;">${esc(p)}</div>`;
+        if (p.includes('─────')) return dividers ? `<hr/>` : '';
+        return `<div class="pp" style="margin-bottom:5pt;text-align:justify;">${esc(p)}</div>`;
       }).join('');
-      if (dividers && i < printData.chunks.length-1) html += `<hr style="border:none;border-top:1px dashed #ccc;margin:10pt 0;"/>`;
+      html += '</div>';
+      if (dividers && i < printData.chunks.length-1) html += `<hr/>`;
     });
-    printPreview.innerHTML = html;
   } else {
-    let html = '';
+    html += `<div class="pc">`;
+    if (titles && printData.title) html += `<div class="pc-title" style="font-weight:bold;font-size:${(fontSize+1.5).toFixed(1)}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;">${esc(printData.title)}</div>`;
     splitParas(printData.text).forEach(line => {
       const isSep = line.includes('─────');
-      if (isSep && dividers) { html += `<hr style="border:none;border-top:1px dashed #ccc;margin:8pt 0;"/>`; return; }
-      if (isSep) return;
-      html += `<div style="margin-bottom:5pt;text-align:justify;">${esc(line)}</div>`;
+      if (isSep) { if (dividers) html += `<hr/>`; return; }
+      html += `<div class="pp" style="margin-bottom:5pt;text-align:justify;">${esc(line)}</div>`;
     });
-    printPreview.innerHTML = html || `<div>${esc(printData.text)}</div>`;
+    html += '</div>';
   }
-  buildPrintRoot(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreakSelect.value);
-}
-function buildPrintRoot(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreak) {
-  printRoot.innerHTML = ''; printRoot.className = twoCol ? 'two-col' : '';
-  printRoot.style.setProperty('--pf', fontFamily); printRoot.style.setProperty('--ps', fontSize+'pt'); printRoot.style.setProperty('--pl', lineHeight); printRoot.style.setProperty('--pb', pageBreak);
-  if (printData.chunks && printData.chunks.length > 0) {
-    printData.chunks.forEach((ch, i) => {
-      const sec = document.createElement('div'); sec.className = 'print-chapter';
-      if (titles) { const t = document.createElement('div'); t.className = 'print-chapter-title'; t.textContent = ch.title; sec.appendChild(t); }
-      splitParas(ch.content).forEach(para => {
-        if (para.includes('─────')) { if (dividers) { const hr = document.createElement('hr'); hr.className = 'print-divider'; sec.appendChild(hr); } return; }
-        const p = document.createElement('p'); p.className = 'print-para'; p.textContent = para; sec.appendChild(p);
-      });
-      printRoot.appendChild(sec);
-      if (dividers && i < printData.chunks.length-1) { const hr = document.createElement('hr'); hr.className = 'print-divider'; printRoot.appendChild(hr); }
-    });
-  } else {
-    const sec = document.createElement('div'); sec.className = 'print-chapter';
-    if (titles && printData.title) { const t = document.createElement('div'); t.className = 'print-chapter-title'; t.textContent = printData.title; sec.appendChild(t); }
-    splitParas(printData.text).forEach(line => {
-      if (line.includes('─────')) { if (dividers) { const hr = document.createElement('hr'); hr.className = 'print-divider'; sec.appendChild(hr); } return; }
-      const p = document.createElement('p'); p.className = 'print-para'; p.textContent = line; sec.appendChild(p);
-    });
-    printRoot.appendChild(sec);
-  }
+
+  previewDisplay.innerHTML = html || `<div>${esc(printData.text)}</div>`;
+  printPreview.innerHTML   = html || `<div>${esc(printData.text)}</div>`;
 }
 doPrintBtn.addEventListener('click', () => { if (!printData) return; showStatus(statusPrint, '🖨 Opening print dialog…', 'info'); setTimeout(() => { window.print(); showStatus(statusPrint, "✓ Print dialog opened. Use your browser's print settings for margins & paper.", 'success', true); }, 150); });
 
