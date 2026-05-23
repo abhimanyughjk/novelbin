@@ -8,32 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
   <style id="printStyles">
-    /* Print handled via JS beforeprint/afterprint — no @media print needed for layout */
-    #printOverlay {
-      display: none;
-      position: fixed; inset: 0; z-index: 99999;
-      background: #fff; color: #000;
-      overflow-y: auto;
-      padding: 0;
-    }
-    #printOverlay.printing { display: block; }
-    @media print {
-      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      body > *:not(#printOverlay) { display: none !important; visibility: hidden !important; }
-      #printOverlay {
-        display: block !important; visibility: visible !important;
-        position: static !important; overflow: visible !important;
-        width: 100% !important; height: auto !important;
-        background: #fff !important; color: #000 !important;
-        padding: 0 !important; margin: 0 !important;
-      }
-      #printOverlay .pc { page-break-after: var(--pb, auto); }
-      #printOverlay .pc-title { font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 4pt; margin-bottom: 8pt; }
-      #printOverlay .pp { margin-bottom: 5pt; text-align: justify; }
-      #printOverlay hr { border: none; border-top: 1px dashed #ccc; margin: 8pt 0; }
-      #printOverlay.two-col { column-count: 2; column-gap: 20pt; }
-      #printOverlay.two-col .pc-title { column-span: all; }
-    }
+    /* Printing handled via window.open — no @media print rules needed */
   </style>
 
   <style>
@@ -304,11 +279,26 @@
     .hist-count { font-family: var(--mono); font-size: 10px; color: var(--accent2); background: rgba(124,58,237,.15); border: 1px solid rgba(124,58,237,.3); border-radius: 10px; padding: 1px 8px; }
     .hist-clear-all { font-family: var(--mono); font-size: 10px; color: var(--error); background: rgba(255,69,96,.08); border: 1px solid rgba(255,69,96,.25); border-radius: 4px; padding: 3px 9px; cursor: pointer; transition: all .2s; }
     .hist-clear-all:hover { background: rgba(255,69,96,.18); }
-    .hist-sub-tabs { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+    .hist-sub-tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
     .hist-sub-tab { padding: 7px 10px; background: var(--surface2); border: none; color: var(--muted); font-family: var(--ff); font-size: 12px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 5px; }
-    .hist-sub-tab:first-child { border-right: 1px solid var(--border); }
+    .hist-sub-tab:not(:last-child) { border-right: 1px solid var(--border); }
     .hist-sub-tab.active { background: rgba(0,229,255,.07); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
     .hist-sub-tab:hover:not(.active) { background: rgba(255,255,255,.03); color: var(--text); }
+    /* SESSION LOG */
+    .log-list { display: flex; flex-direction: column; gap: 3px; }
+    .log-entry { display: flex; align-items: baseline; gap: 8px; padding: 5px 10px; border-radius: 5px; background: var(--surface2); border: 1px solid var(--border); font-family: var(--mono); font-size: 10px; line-height: 1.5; }
+    .log-entry.success { border-left: 3px solid var(--success); }
+    .log-entry.error   { border-left: 3px solid var(--error); }
+    .log-entry.warn    { border-left: 3px solid var(--warn); }
+    .log-entry.info    { border-left: 3px solid var(--accent); }
+    .log-time  { color: var(--muted); flex-shrink: 0; font-size: 9px; }
+    .log-badge { flex-shrink: 0; font-size: 9px; padding: 1px 5px; border-radius: 3px; text-transform: uppercase; letter-spacing: .5px; }
+    .log-badge.success { background: rgba(0,245,160,.12); color: var(--success); }
+    .log-badge.error   { background: rgba(255,69,96,.12);  color: var(--error); }
+    .log-badge.warn    { background: rgba(255,179,0,.12);  color: var(--warn); }
+    .log-badge.info    { background: rgba(0,229,255,.12);  color: var(--accent); }
+    .log-msg   { color: var(--text); flex: 1; word-break: break-word; }
+    .log-empty { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center; padding: 20px 0; }
     .hist-list { display: flex; flex-direction: column; gap: 8px; }
     .hc { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; transition: border-color .2s, background .2s; position: relative; overflow: hidden; }
     .hc::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, var(--accent2), var(--accent)); border-radius: 8px 0 0 8px; }
@@ -379,7 +369,6 @@
 <body>
 
 <iframe id="scrapeFrame" style="position:fixed;top:-9999px;left:-9999px;width:1200px;height:900px;border:none;visibility:hidden;pointer-events:none;z-index:-1;" sandbox="allow-same-origin allow-scripts" referrerpolicy="no-referrer"></iframe>
-<div id="printOverlay"></div>
 
 <div id="appHeader">
   <div class="logo-mark">N</div>
@@ -591,9 +580,11 @@
     <div class="hist-sub-tabs">
       <button class="hist-sub-tab active" id="subTabExtracts" >📄 Extracts</button>
       <button class="hist-sub-tab"        id="subTabBookmarks">🔖 Bookmark Updates</button>
+      <button class="hist-sub-tab"        id="subTabLog"      >🖥 Session Log</button>
     </div>
     <div id="extractsList"  class="hist-list"></div>
     <div id="bookmarksList" class="hist-list" style="display:none;"></div>
+    <div id="sessionLogList" class="log-list"  style="display:none;"></div>
     <div class="status" id="statusHistory"></div>
   </div>
 
@@ -718,6 +709,8 @@ const bookmarksList     = document.getElementById('bookmarksList');
 const statusHistory     = document.getElementById('statusHistory');
 const subTabExtracts    = document.getElementById('subTabExtracts');
 const subTabBookmarks   = document.getElementById('subTabBookmarks');
+const subTabLog         = document.getElementById('subTabLog');
+const sessionLogList    = document.getElementById('sessionLogList');
 const printSourceInfo   = document.getElementById('printSourceInfo');
 const printPreview      = document.getElementById('printPreview');
 const fontSizeSlider    = document.getElementById('fontSizeSlider');
@@ -732,7 +725,6 @@ const dividersToggle    = document.getElementById('dividersToggle');
 const doPrintBtn        = document.getElementById('doPrintBtn');
 const statusPrint       = document.getElementById('statusPrint');
 const footerText        = document.getElementById('footerText');
-const printOverlay      = document.getElementById('printOverlay');
 const modeContinuous    = document.getElementById('modeContinuous');
 const modeCustomUrls    = document.getElementById('modeCustomUrls');
 const urlListPanel      = document.getElementById('urlListPanel');
@@ -772,6 +764,31 @@ let singleText = '', singleTitle = '', singleUrl = '';
 let bulkText = '', bulkRunning = false, bulkStopped = false;
 let bulkChunks = [], bulkFirstTitle = '', bulkLastTitle = '', bulkCount = 0, bulkStartUrl = '';
 let activeHistSub = 'extracts';
+
+/* ── SESSION LOG (sessionStorage, cleared on reload) ── */
+const SESSION_LOG_KEY = 'nb_session_log';
+function logEntry(msg, type = 'info') {
+  const now = new Date();
+  const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  let log = [];
+  try { log = JSON.parse(sessionStorage.getItem(SESSION_LOG_KEY) || '[]'); } catch {}
+  log.unshift({ time, msg: msg.replace(/^[✓✗⚠🖨📋🔖]\s*/, ''), type });
+  if (log.length > 200) log = log.slice(0, 200);
+  try { sessionStorage.setItem(SESSION_LOG_KEY, JSON.stringify(log)); } catch {}
+  if (activeHistSub === 'log') renderSessionLog();
+}
+function renderSessionLog() {
+  let log = [];
+  try { log = JSON.parse(sessionStorage.getItem(SESSION_LOG_KEY) || '[]'); } catch {}
+  histCountBadge.textContent = log.length;
+  if (!log.length) { sessionLogList.innerHTML = '<div class="log-empty">No activity this session yet.</div>'; return; }
+  sessionLogList.innerHTML = log.map(e => `
+    <div class="log-entry ${e.type}">
+      <span class="log-time">${e.time}</span>
+      <span class="log-badge ${e.type}">${e.type}</span>
+      <span class="log-msg">${esc(e.msg)}</span>
+    </div>`).join('');
+}
 let printData = null;
 let bulkMode = 'continuous';
 let customUrlList = [];
@@ -787,6 +804,7 @@ let bueRangeActive   = { from: 1, to: Infinity };
 function showStatus(el, msg, type = 'info', persist = false) {
   el.textContent = msg; el.className = 'status ' + type; el.style.display = 'block';
   if (!persist) setTimeout(() => { el.style.display = 'none'; }, 4500);
+  logEntry(msg, type);
 }
 function calcStats(text) { const w = text.trim() ? text.trim().split(/\s+/).length : 0; return { words: w, chars: text.length }; }
 function fmtTimestamp(ts) { const d = new Date(ts), p = n => String(n).padStart(2,'0'), mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${d.getDate()} ${mo[d.getMonth()]} ${d.getFullYear()} · ${p(d.getHours())}:${p(d.getMinutes())}`; }
@@ -1438,8 +1456,9 @@ function autoSaveHistory(entry) {
   storageSet(HISTORY_KEY, hist);
 }
 function loadHistText(id) { return storageGet('nb_text_'+id, ''); }
-subTabExtracts.addEventListener('click', () => { activeHistSub = 'extracts'; subTabExtracts.classList.add('active'); subTabBookmarks.classList.remove('active'); extractsList.style.display = ''; bookmarksList.style.display = 'none'; renderExtracts(); });
-subTabBookmarks.addEventListener('click', () => { activeHistSub = 'bookmarks'; subTabBookmarks.classList.add('active'); subTabExtracts.classList.remove('active'); bookmarksList.style.display = ''; extractsList.style.display = 'none'; renderBookmarkLog(); });
+subTabExtracts.addEventListener('click', () => { activeHistSub = 'extracts'; subTabExtracts.classList.add('active'); subTabBookmarks.classList.remove('active'); subTabLog.classList.remove('active'); extractsList.style.display = ''; bookmarksList.style.display = 'none'; sessionLogList.style.display = 'none'; renderExtracts(); });
+subTabBookmarks.addEventListener('click', () => { activeHistSub = 'bookmarks'; subTabBookmarks.classList.add('active'); subTabExtracts.classList.remove('active'); subTabLog.classList.remove('active'); bookmarksList.style.display = ''; extractsList.style.display = 'none'; sessionLogList.style.display = 'none'; renderBookmarkLog(); });
+subTabLog.addEventListener('click', () => { activeHistSub = 'log'; subTabLog.classList.add('active'); subTabExtracts.classList.remove('active'); subTabBookmarks.classList.remove('active'); sessionLogList.style.display = ''; extractsList.style.display = 'none'; bookmarksList.style.display = 'none'; renderSessionLog(); });
 async function renderExtracts() {
   const hist = storageGet(HISTORY_KEY, []); histCountBadge.textContent = hist.length;
   if (hist.length === 0) { extractsList.innerHTML = `<div class="hist-empty"><div class="icon">📭</div><div class="msg">No extracts yet.</div></div>`; return; }
@@ -1467,10 +1486,15 @@ function renderBookmarkLog() {
 bookmarksList.addEventListener('click', e => { const btn = e.target.closest('.hc-btn.del'); if (!btn) return; let log = storageGet(BOOKMARK_LOG, []); log = log.filter(x => x.id !== btn.dataset.id); storageSet(BOOKMARK_LOG, log); renderBookmarkLog(); showStatus(statusHistory, '✓ Deleted.', 'info'); });
 histClearAll.addEventListener('click', () => {
   if (activeHistSub === 'extracts') { if (!confirm('Clear all extract history?')) return; const hist = storageGet(HISTORY_KEY, []); hist.forEach(e => { try { localStorage.removeItem('nb_text_'+e.id); } catch {} }); storageSet(HISTORY_KEY, []); renderExtracts(); }
-  else { if (!confirm('Clear all bookmark logs?')) return; storageSet(BOOKMARK_LOG, []); renderBookmarkLog(); }
+  else if (activeHistSub === 'bookmarks') { if (!confirm('Clear all bookmark logs?')) return; storageSet(BOOKMARK_LOG, []); renderBookmarkLog(); }
+  else if (activeHistSub === 'log') { if (!confirm('Clear session log?')) return; try { sessionStorage.removeItem(SESSION_LOG_KEY); } catch {} renderSessionLog(); return; }
   showStatus(statusHistory, '✓ Cleared.', 'warn');
 });
-function renderHistory() { if (activeHistSub === 'extracts') { extractsList.style.display = ''; bookmarksList.style.display = 'none'; renderExtracts(); } else { bookmarksList.style.display = ''; extractsList.style.display = 'none'; renderBookmarkLog(); } }
+function renderHistory() {
+  if (activeHistSub === 'extracts') { extractsList.style.display = ''; bookmarksList.style.display = 'none'; sessionLogList.style.display = 'none'; renderExtracts(); }
+  else if (activeHistSub === 'bookmarks') { bookmarksList.style.display = ''; extractsList.style.display = 'none'; sessionLogList.style.display = 'none'; renderBookmarkLog(); }
+  else { sessionLogList.style.display = ''; extractsList.style.display = 'none'; bookmarksList.style.display = 'none'; renderSessionLog(); }
+}
 
 /* ── PRINT ── */
 function setPrintData(text, title, chunks) { printData = { text, title, chunks }; }
@@ -1534,41 +1558,62 @@ function buildPreview() {
   }
   buildPrintRoot(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreakSelect.value);
 }
-function buildPrintRoot(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreak) {
-  printOverlay.innerHTML = '';
-  printOverlay.className = twoCol ? 'two-col' : '';
-  printOverlay.style.cssText = `font-family:${fontFamily};font-size:${fontSize}pt;line-height:${lineHeight};--pb:${pageBreak};`;
-  if (printData.chunks && printData.chunks.length > 0) {
-    printData.chunks.forEach((ch, i) => {
-      const sec = document.createElement('div'); sec.className = 'pc';
-      if (titles) { const t = document.createElement('div'); t.className = 'pc-title'; t.textContent = ch.title; sec.appendChild(t); }
+function buildPrintHTML(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreak) {
+  let body = '';
+  const chunks = printData.chunks && printData.chunks.length > 0 ? printData.chunks : null;
+  if (chunks) {
+    chunks.forEach((ch, i) => {
+      const pb = pageBreak === 'always' && i > 0 ? 'page-break-before:always;' : '';
+      body += `<div class="pc" style="${pb}">`;
+      if (titles) body += `<div class="pc-title">${esc(ch.title)}</div>`;
       splitParas(ch.content).forEach(para => {
-        if (para.includes('─────')) { if (dividers) { const hr = document.createElement('hr'); sec.appendChild(hr); } return; }
-        const p = document.createElement('p'); p.className = 'pp'; p.textContent = para; sec.appendChild(p);
+        if (para.includes('─────')) { if (dividers) body += `<hr/>`; return; }
+        body += `<p class="pp">${esc(para)}</p>`;
       });
-      printOverlay.appendChild(sec);
-      if (dividers && i < printData.chunks.length - 1) { const hr = document.createElement('hr'); printOverlay.appendChild(hr); }
+      body += `</div>`;
+      if (dividers && i < chunks.length - 1) body += `<hr/>`;
     });
   } else {
-    const sec = document.createElement('div'); sec.className = 'pc';
-    if (titles && printData.title) { const t = document.createElement('div'); t.className = 'pc-title'; t.textContent = printData.title; sec.appendChild(t); }
+    body += `<div class="pc">`;
+    if (titles && printData.title) body += `<div class="pc-title">${esc(printData.title)}</div>`;
     splitParas(printData.text).forEach(line => {
-      if (line.includes('─────')) { if (dividers) { const hr = document.createElement('hr'); sec.appendChild(hr); } return; }
-      const p = document.createElement('p'); p.className = 'pp'; p.textContent = line; sec.appendChild(p);
+      if (line.includes('─────')) { if (dividers) body += `<hr/>`; return; }
+      body += `<p class="pp">${esc(line)}</p>`;
     });
-    printOverlay.appendChild(sec);
+    body += `</div>`;
   }
+  const colCSS = twoCol ? 'body{column-count:2;column-gap:20pt;} .pc-title{column-span:all;}' : '';
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>${esc(printData.title || 'Print')}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:#fff;color:#000;font-family:${fontFamily};font-size:${fontSize}pt;line-height:${lineHeight};}
+  .pc{margin-bottom:0;}
+  .pc-title{font-weight:bold;font-size:${fontSize + 1.5}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;margin-top:4pt;}
+  .pp{margin-bottom:5pt;text-align:justify;}
+  hr{border:none;border-top:1px dashed #ccc;margin:8pt 0;}
+  ${colCSS}
+  @media print{html,body{overflow:visible!important;height:auto!important;}}
+</style></head><body>${body}</body></html>`;
 }
 doPrintBtn.addEventListener('click', () => {
   if (!printData) return;
   showStatus(statusPrint, '🖨 Opening print dialog…', 'info');
-  // Show overlay so browser renders full content before print dialog
-  printOverlay.classList.add('printing');
-  setTimeout(() => {
-    window.print();
-    printOverlay.classList.remove('printing');
-    showStatus(statusPrint, "✓ Print dialog opened. Use your browser's print settings for margins & paper.", 'success', true);
-  }, 200);
+  const fontSize = parseFloat(fontSizeSlider.value), lineHeight = parseFloat(lineHeightSlider.value),
+        fontFamily = fontFamilySelect.value, twoCol = twoColToggle.checked,
+        titles = titlesToggle.checked, dividers = dividersToggle.checked,
+        pageBreak = pageBreakSelect.value;
+  const html = buildPrintHTML(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreak);
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) { showStatus(statusPrint, '✗ Popup blocked — allow popups for this site and try again.', 'error', true); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  // Wait for fonts/layout then print
+  win.onload = () => { win.print(); };
+  // Fallback if onload already fired
+  setTimeout(() => { try { win.print(); } catch {} }, 600);
+  showStatus(statusPrint, "✓ Print window opened. Use your browser's print settings for margins & paper.", 'success', true);
 });
 
 /* ── INIT ── */
