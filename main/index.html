@@ -36,6 +36,7 @@
       --accent:   #00e5ff;
       --accent2:  #7c3aed;
       --accent3:  #ff3cac;
+      --accent4:  #f59e0b;
       --success:  #00f5a0;
       --error:    #ff4560;
       --warn:     #ffb300;
@@ -50,7 +51,10 @@
     body { background: var(--bg); color: var(--text); font-family: var(--ff); font-size: 14px; display: flex; flex-direction: column; }
     body::before {
       content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
-      background: radial-gradient(ellipse 60% 40% at 15% 0%, rgba(124,58,237,.06) 0%, transparent 60%), radial-gradient(ellipse 50% 50% at 85% 100%, rgba(0,229,255,.05) 0%, transparent 60%), repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,.012) 39px, rgba(255,255,255,.012) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,.012) 39px, rgba(255,255,255,.012) 40px);
+      background: radial-gradient(ellipse 60% 40% at 15% 0%, rgba(124,58,237,.06) 0%, transparent 60%),
+                  radial-gradient(ellipse 50% 50% at 85% 100%, rgba(0,229,255,.05) 0%, transparent 60%),
+                  repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,.012) 39px, rgba(255,255,255,.012) 40px),
+                  repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,.012) 39px, rgba(255,255,255,.012) 40px);
     }
 
     /* HEADER */
@@ -71,9 +75,9 @@
     .url-go { padding: 5px 14px; border-radius: 6px; border: 1px solid var(--accent); background: rgba(0,229,255,.08); color: var(--accent); font-family: var(--ff); font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: all .2s; white-space: nowrap; }
     .url-go:hover { background: rgba(0,229,255,.18); box-shadow: 0 0 10px rgba(0,229,255,.3); }
 
-    /* NAV TABS */
-    #navTabs { position: relative; z-index: 10; flex-shrink: 0; display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--border); }
-    .nav-tab { padding: 9px 6px; background: var(--surface); border: none; color: var(--muted); font-family: var(--ff); font-size: 12px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 5px; border-right: 1px solid var(--border); }
+    /* NAV TABS — 5 tabs now */
+    #navTabs { position: relative; z-index: 10; flex-shrink: 0; display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--border); }
+    .nav-tab { padding: 9px 4px; background: var(--surface); border: none; color: var(--muted); font-family: var(--ff); font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 4px; border-right: 1px solid var(--border); }
     .nav-tab:last-child { border-right: none; }
     .nav-tab.active { background: rgba(0,229,255,.07); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
     .nav-tab:hover:not(.active) { background: rgba(255,255,255,.03); color: var(--text); }
@@ -157,59 +161,31 @@
     textarea.main-out:focus { border-color: rgba(0,229,255,.3); }
     textarea.main-out::placeholder { color: var(--muted); font-style: italic; }
 
-    /* ══════ BULK MODE SWITCHER (NEW) ══════ */
-    .bulk-mode-switcher {
-      display: grid; grid-template-columns: 1fr 1fr;
-      background: var(--surface3); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
-    }
-    .bulk-mode-btn {
-      padding: 8px 10px; background: transparent; border: none; color: var(--muted);
-      font-family: var(--ff); font-size: 12px; font-weight: 600; letter-spacing: .8px;
-      text-transform: uppercase; cursor: pointer; transition: all .2s;
-      display: flex; align-items: center; justify-content: center; gap: 6px;
-    }
+    /* BULK MODE SWITCHER */
+    .bulk-mode-switcher { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface3); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .bulk-mode-btn { padding: 8px 10px; background: transparent; border: none; color: var(--muted); font-family: var(--ff); font-size: 12px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
     .bulk-mode-btn:first-child { border-right: 1px solid var(--border); }
     .bulk-mode-btn.active { background: rgba(0,229,255,.08); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
     .bulk-mode-btn:hover:not(.active) { background: rgba(255,255,255,.03); color: var(--text); }
 
     /* URL LIST PANEL */
-    .url-list-panel {
-      display: none; flex-direction: column; gap: 8px;
-      background: var(--surface2); border: 1px solid var(--border);
-      border-left: 3px solid var(--accent3); border-radius: 8px; padding: 10px 12px;
-    }
+    .url-list-panel { display: none; flex-direction: column; gap: 8px; background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--accent3); border-radius: 8px; padding: 10px 12px; }
     .url-list-panel.visible { display: flex; }
     .url-list-header { display: flex; align-items: center; justify-content: space-between; }
     .url-list-title { font-family: var(--mono); font-size: 10px; color: var(--accent3); letter-spacing: 1.2px; text-transform: uppercase; }
     .url-list-meta  { font-family: var(--mono); font-size: 10px; color: var(--muted); }
-
-    textarea.url-list-input {
-      width: 100%; height: 100px; background: var(--surface3); border: 1px solid var(--border);
-      border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 10.5px;
-      line-height: 1.6; padding: 8px 10px; resize: vertical; outline: none; transition: border-color .2s;
-    }
+    textarea.url-list-input { width: 100%; height: 100px; background: var(--surface3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 10.5px; line-height: 1.6; padding: 8px 10px; resize: vertical; outline: none; transition: border-color .2s; }
     textarea.url-list-input:focus { border-color: rgba(255,60,172,.35); }
     textarea.url-list-input::placeholder { color: var(--muted); font-style: italic; font-size: 10px; }
-
     .url-list-hint { font-family: var(--mono); font-size: 10px; color: var(--muted); line-height: 1.6; }
     .url-list-hint span { color: var(--accent3); }
-
     .url-list-actions { display: flex; gap: 7px; }
-    .url-list-action-btn {
-      padding: 5px 12px; border-radius: 5px; border: 1px solid;
-      font-family: var(--ff); font-size: 11px; font-weight: 600; letter-spacing: .8px;
-      text-transform: uppercase; cursor: pointer; transition: all .2s;
-    }
+    .url-list-action-btn { padding: 5px 12px; border-radius: 5px; border: 1px solid; font-family: var(--ff); font-size: 11px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; cursor: pointer; transition: all .2s; }
     .url-list-action-btn.validate { background: rgba(0,229,255,.07); border-color: var(--accent); color: var(--accent); }
     .url-list-action-btn.validate:hover { background: rgba(0,229,255,.15); }
     .url-list-action-btn.clear-urls { background: rgba(255,69,96,.07); border-color: var(--error); color: var(--error); }
     .url-list-action-btn.clear-urls:hover { background: rgba(255,69,96,.15); }
-
-    .url-list-validated {
-      display: none; flex-direction: column; gap: 4px;
-      background: var(--surface3); border: 1px solid rgba(0,245,160,.15);
-      border-radius: 6px; padding: 8px 10px; max-height: 80px; overflow-y: auto;
-    }
+    .url-list-validated { display: none; flex-direction: column; gap: 4px; background: var(--surface3); border: 1px solid rgba(0,245,160,.15); border-radius: 6px; padding: 8px 10px; max-height: 80px; overflow-y: auto; }
     .url-list-validated.visible { display: flex; }
     .url-list-validated::-webkit-scrollbar { width: 3px; }
     .url-list-validated::-webkit-scrollbar-thumb { background: var(--border); }
@@ -217,6 +193,99 @@
     .url-validated-num  { font-family: var(--mono); font-size: 9px; color: var(--muted); min-width: 18px; }
     .url-validated-url  { font-family: var(--mono); font-size: 10px; color: var(--success); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .url-validated-bad  { color: var(--error) !important; }
+
+    /* ══════════════════════════════════
+       BULK URL EXTRACTOR PANEL STYLES
+    ══════════════════════════════════ */
+    #panelUrlExtractor { gap: 14px; }
+
+    .bue-hero {
+      background: linear-gradient(135deg, rgba(245,158,11,.06), rgba(255,60,172,.06));
+      border: 1px solid rgba(245,158,11,.25);
+      border-left: 3px solid var(--accent4);
+      border-radius: 8px; padding: 11px 14px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .bue-hero-title { font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--accent4); }
+    .bue-hero-desc  { font-family: var(--mono); font-size: 10px; color: var(--muted); line-height: 1.6; }
+    .bue-hero-desc span { color: var(--text); }
+
+    .bue-input-row { display: flex; gap: 8px; align-items: stretch; }
+    #novelPageInput { flex: 1; background: var(--surface3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 11px; padding: 8px 10px; outline: none; transition: border-color .2s; }
+    #novelPageInput:focus { border-color: rgba(245,158,11,.4); }
+    #novelPageInput::placeholder { color: var(--muted); font-size: 10px; }
+    .bue-fetch-btn { padding: 8px 16px; border-radius: 6px; border: 1px solid var(--accent4); background: rgba(245,158,11,.1); color: var(--accent4); font-family: var(--ff); font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: all .2s; white-space: nowrap; }
+    .bue-fetch-btn:hover:not(:disabled) { background: rgba(245,158,11,.22); box-shadow: 0 0 12px rgba(245,158,11,.3); }
+    .bue-fetch-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+    .bue-loader { display: none; align-items: center; gap: 10px; padding: 4px 0; }
+    .bue-spinner { width: 16px; height: 16px; border: 2px solid rgba(245,158,11,.15); border-top-color: var(--accent4); border-radius: 50%; animation: spin .7s linear infinite; }
+    .bue-loader-text { font-family: var(--mono); font-size: 11px; color: var(--accent4); letter-spacing: 1.2px; animation: pulse 1s ease-in-out infinite; }
+
+    /* result area */
+    .bue-results { display: none; flex-direction: column; gap: 10px; }
+    .bue-results.visible { display: flex; }
+
+    .bue-result-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .bue-result-title  { font-size: 13px; font-weight: 700; color: var(--text); letter-spacing: .5px; }
+    .bue-result-badges { display: flex; gap: 6px; }
+    .bue-badge { font-family: var(--mono); font-size: 10px; border-radius: 3px; padding: 2px 8px; }
+    .bue-badge.count  { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); color: var(--accent4); }
+    .bue-badge.novel  { background: rgba(0,229,255,.08); border: 1px solid rgba(0,229,255,.2); color: var(--accent); }
+
+    /* order/filter bar */
+    .bue-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .bue-ctrl-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+    .bue-seg { display: flex; background: var(--surface3); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .bue-seg-btn { padding: 5px 12px; background: transparent; border: none; color: var(--muted); font-family: var(--ff); font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; cursor: pointer; transition: all .2s; }
+    .bue-seg-btn:not(:last-child) { border-right: 1px solid var(--border); }
+    .bue-seg-btn.active { background: rgba(245,158,11,.1); color: var(--accent4); }
+
+    .bue-range-row { display: flex; gap: 7px; align-items: center; }
+    #bueRangeFrom, #bueRangeTo { width: 68px; background: var(--surface3); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-family: var(--mono); font-size: 11px; padding: 4px 7px; outline: none; text-align: center; }
+    #bueRangeFrom:focus, #bueRangeTo:focus { border-color: rgba(245,158,11,.4); }
+    .bue-range-sep { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+    .bue-range-apply { padding: 4px 10px; border-radius: 5px; border: 1px solid rgba(245,158,11,.4); background: rgba(245,158,11,.08); color: var(--accent4); font-family: var(--ff); font-size: 11px; font-weight: 600; cursor: pointer; transition: all .2s; }
+    .bue-range-apply:hover { background: rgba(245,158,11,.18); }
+
+    /* chapter list */
+    .bue-list-wrap { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .bue-list-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    .bue-list-info { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+    .bue-list-info span { color: var(--accent); }
+    .bue-select-btns { display: flex; gap: 6px; }
+    .bue-sel-btn { padding: 3px 9px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface3); color: var(--muted); font-family: var(--ff); font-size: 11px; font-weight: 600; cursor: pointer; transition: all .15s; }
+    .bue-sel-btn:hover { color: var(--text); border-color: rgba(255,255,255,.15); }
+
+    .bue-chapter-list { max-height: 220px; overflow-y: auto; }
+    .bue-chapter-list::-webkit-scrollbar { width: 4px; }
+    .bue-chapter-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .bue-ch-item { display: flex; align-items: center; gap: 9px; padding: 6px 12px; border-bottom: 1px solid rgba(255,255,255,.03); cursor: pointer; transition: background .15s; user-select: none; }
+    .bue-ch-item:last-child { border-bottom: none; }
+    .bue-ch-item:hover { background: rgba(255,255,255,.03); }
+    .bue-ch-item.selected { background: rgba(245,158,11,.06); }
+    .bue-ch-check { width: 14px; height: 14px; border: 1px solid var(--border); border-radius: 3px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+    .bue-ch-item.selected .bue-ch-check { background: var(--accent4); border-color: var(--accent4); }
+    .bue-ch-check::after { content: '✓'; font-size: 9px; color: #000; opacity: 0; transition: opacity .15s; }
+    .bue-ch-item.selected .bue-ch-check::after { opacity: 1; }
+    .bue-ch-num  { font-family: var(--mono); font-size: 10px; color: var(--muted); min-width: 28px; }
+    .bue-ch-name { font-size: 12px; font-weight: 500; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bue-ch-url  { font-family: var(--mono); font-size: 9px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+
+    /* action buttons */
+    .bue-action-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .bue-action-btn { padding: 10px 8px; border-radius: 7px; border: 1px solid; font-family: var(--ff); font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 5px; }
+    .bue-action-btn:disabled { opacity: .3; cursor: not-allowed; }
+    .bue-action-btn.send  { background: rgba(255,179,0,.08); border-color: var(--warn); color: var(--warn); }
+    .bue-action-btn.send:hover:not(:disabled) { background: rgba(255,179,0,.2); box-shadow: 0 0 10px rgba(255,179,0,.2); }
+    .bue-action-btn.copyurls { background: rgba(0,245,160,.08); border-color: var(--success); color: var(--success); }
+    .bue-action-btn.copyurls:hover:not(:disabled) { background: rgba(0,245,160,.18); }
+    .bue-action-btn.reset { background: rgba(255,69,96,.07); border-color: var(--error); color: var(--error); }
+    .bue-action-btn.reset:hover:not(:disabled) { background: rgba(255,69,96,.15); }
+
+    .bue-sent-confirm { display: none; background: rgba(255,179,0,.08); border: 1px solid rgba(255,179,0,.3); border-radius: 7px; padding: 9px 13px; font-family: var(--mono); font-size: 11px; color: var(--warn); line-height: 1.6; }
+    .bue-sent-confirm.visible { display: block; }
 
     /* HISTORY */
     .hist-header { display: flex; align-items: center; justify-content: space-between; }
@@ -308,7 +377,7 @@
     <h1>NovelBin Extractor</h1>
     <p>novelbin.com // chapter ripper — web edition</p>
   </div>
-  <span class="ver-badge">v7.0</span>
+  <span class="ver-badge">v8.0</span>
 </div>
 <div class="scanline"></div>
 
@@ -319,15 +388,16 @@
 </div>
 
 <div id="navTabs">
-  <button class="nav-tab active" id="tabSingle" >📄 Current</button>
-  <button class="nav-tab"        id="tabBulk"   >📚 Till Latest</button>
-  <button class="nav-tab"        id="tabHistory">🕘 History</button>
-  <button class="nav-tab"        id="tabPrint"  >🖨 Print</button>
+  <button class="nav-tab active" id="tabSingle"      >📄 Current</button>
+  <button class="nav-tab"        id="tabBulk"        >📚 Till Latest</button>
+  <button class="nav-tab"        id="tabUrlExtractor">🔗 URL Extractor</button>
+  <button class="nav-tab"        id="tabHistory"     >🕘 History</button>
+  <button class="nav-tab"        id="tabPrint"       >🖨 Print</button>
 </div>
 
 <div id="workspace">
 
-  <!-- SINGLE PANEL -->
+  <!-- ═══════════ SINGLE PANEL ═══════════ -->
   <div class="panel active" id="panelSingle">
     <div class="chapter-info">
       <span class="ci-label">Chapter</span>
@@ -350,22 +420,18 @@
     </div>
   </div>
 
-  <!-- BULK PANEL -->
+  <!-- ═══════════ BULK PANEL ═══════════ -->
   <div class="panel" id="panelBulk">
-
-    <!-- MODE SWITCHER -->
     <div class="bulk-mode-switcher">
       <button class="bulk-mode-btn active" id="modeContinuous">🔗 From URL → Latest</button>
       <button class="bulk-mode-btn"        id="modeCustomUrls" >📋 Custom URL List</button>
     </div>
-
-    <!-- CUSTOM URL LIST PANEL -->
     <div class="url-list-panel" id="urlListPanel">
       <div class="url-list-header">
         <span class="url-list-title">📋 Paste Chapter URLs</span>
         <span class="url-list-meta" id="urlListMeta">0 URLs</span>
       </div>
-      <textarea class="url-list-input" id="urlListInput" placeholder="Paste one URL per line:&#10;https://novelbin.com/b/novel/chapter-1&#10;https://novelbin.com/b/novel/chapter-2&#10;https://novelbin.com/b/novel/chapter-5&#10;...&#10;&#10;Order will be preserved exactly as entered."></textarea>
+      <textarea class="url-list-input" id="urlListInput" placeholder="Paste one URL per line:&#10;https://novelbin.com/b/novel/chapter-1&#10;https://novelbin.com/b/novel/chapter-2&#10;...&#10;&#10;Order will be preserved exactly as entered."></textarea>
       <div class="url-list-hint">One URL per line · <span>novelbin.com</span> links only · duplicates are ignored</div>
       <div class="url-list-actions">
         <button class="url-list-action-btn validate" id="validateUrlsBtn">✓ Validate &amp; Preview</button>
@@ -373,23 +439,19 @@
       </div>
       <div class="url-list-validated" id="urlListValidated"></div>
     </div>
-
     <div class="chapter-info">
       <span class="ci-label">Progress</span>
       <span class="ci-val" id="bulkChapterTitle" data-ph="Ready to start bulk scrape"></span>
     </div>
-
     <div id="canvasIndicator" style="display:none;" class="canvas-indicator">
       <div class="canvas-pulse"></div>
       <span id="canvasIndicatorText" class="canvas-text">Scraping via hidden canvas…</span>
       <span class="canvas-hint">No tab opened</span>
     </div>
-
     <div class="bulk-grid">
       <button class="bulk-btn start" id="bulkStartBtn">🚀 Start Bulk</button>
       <button class="bulk-btn stop"  id="bulkStopBtn" disabled>⏹ Stop</button>
     </div>
-
     <div class="progress-wrap" id="progressWrap">
       <div class="progress-top">
         <span class="progress-label"  id="progressLabel">SCRAPING...</span>
@@ -400,9 +462,7 @@
       </div>
       <div class="progress-current" id="progressCurrent">Initialising…</div>
     </div>
-
     <div class="status" id="statusBulk"></div>
-
     <div>
       <div class="output-header">
         <span class="output-label">Collected Text</span>
@@ -410,7 +470,6 @@
       </div>
       <textarea id="bulkOutput" class="main-out" readonly placeholder="Chapters accumulate here as they are scraped…"></textarea>
     </div>
-
     <div class="actions">
       <button class="action-btn copy"  id="bulkCopyBtn"  disabled>📋 Copy</button>
       <button class="action-btn print" id="bulkPrintBtn" disabled>🖨 Print</button>
@@ -418,7 +477,82 @@
     </div>
   </div>
 
-  <!-- HISTORY PANEL -->
+  <!-- ═══════════════════════════════════════════════
+       BULK URL EXTRACTOR PANEL
+  ═══════════════════════════════════════════════ -->
+  <div class="panel" id="panelUrlExtractor">
+
+    <div class="bue-hero">
+      <div class="bue-hero-title">🔗 Bulk URL Extractor</div>
+      <div class="bue-hero-desc">
+        Paste a NovelBin novel page (e.g. <span>novelbin.com/b/novel-slug</span>) and this tool will fetch &amp; list all chapter URLs automatically. Select the ones you want, then send them straight to the Bulk Scraper.
+      </div>
+    </div>
+
+    <div class="bue-input-row">
+      <input id="novelPageInput" type="url" placeholder="https://novelbin.com/b/infinite-mana-in-the-apocalypse" spellcheck="false" />
+      <button class="bue-fetch-btn" id="bueFetchBtn">⚡ Fetch Chapters</button>
+    </div>
+
+    <div class="bue-loader" id="bueLoader">
+      <div class="bue-spinner"></div>
+      <span class="bue-loader-text">FETCHING CHAPTER LIST…</span>
+    </div>
+
+    <div class="status" id="statusBue"></div>
+
+    <div class="bue-results" id="bueResults">
+
+      <div class="bue-result-header">
+        <span class="bue-result-title" id="bueNovelTitle">—</span>
+        <div class="bue-result-badges">
+          <span class="bue-badge count" id="bueTotalBadge">0 chapters</span>
+          <span class="bue-badge novel" id="bueNovelBadge">novel</span>
+        </div>
+      </div>
+
+      <!-- order controls -->
+      <div class="bue-controls">
+        <span class="bue-ctrl-label">ORDER:</span>
+        <div class="bue-seg" id="bueOrderSeg">
+          <button class="bue-seg-btn active" data-order="asc">↑ Ch 1 first</button>
+          <button class="bue-seg-btn"        data-order="desc">↓ Latest first</button>
+        </div>
+        <span class="bue-ctrl-label" style="margin-left:8px;">RANGE:</span>
+        <div class="bue-range-row">
+          <input id="bueRangeFrom" type="number" min="1" placeholder="1" title="From chapter #" />
+          <span class="bue-range-sep">–</span>
+          <input id="bueRangeTo"   type="number" min="1" placeholder="end" title="To chapter #" />
+          <button class="bue-range-apply" id="bueRangeApply">Apply</button>
+        </div>
+      </div>
+
+      <!-- list -->
+      <div class="bue-list-wrap">
+        <div class="bue-list-toolbar">
+          <span class="bue-list-info">Showing <span id="bueShownCount">0</span> of <span id="bueTotalCount">0</span> · <span id="bueSelectedCount">0</span> selected</span>
+          <div class="bue-select-btns">
+            <button class="bue-sel-btn" id="bueSelAll">All</button>
+            <button class="bue-sel-btn" id="bueSelNone">None</button>
+            <button class="bue-sel-btn" id="bueSelInvert">Invert</button>
+          </div>
+        </div>
+        <div class="bue-chapter-list" id="bueChapterList"></div>
+      </div>
+
+      <!-- actions -->
+      <div class="bue-action-grid">
+        <button class="bue-action-btn send" id="bueSendBtn" disabled>🚀 Send to Bulk Scraper</button>
+        <button class="bue-action-btn copyurls" id="bueCopyUrlsBtn" disabled>📋 Copy URLs</button>
+        <button class="bue-action-btn reset"    id="bueResetBtn">🗑 Reset</button>
+      </div>
+
+      <div class="bue-sent-confirm" id="bueSentConfirm"></div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════ HISTORY PANEL ═══════════ -->
   <div class="panel" id="panelHistory">
     <div class="hist-header">
       <div class="hist-header-left">
@@ -436,7 +570,7 @@
     <div class="status" id="statusHistory"></div>
   </div>
 
-  <!-- PRINT PANEL -->
+  <!-- ═══════════ PRINT PANEL ═══════════ -->
   <div class="panel" id="panelPrint">
     <div class="print-source-info" id="printSourceInfo">
       <strong>Print source:</strong> No text loaded — extract a chapter first, then configure here.
@@ -510,15 +644,17 @@ const PRINT_CFG_KEY = 'nb_print_cfg';
 function storageGet(key, def) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch { return def; } }
 function storageSet(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
 
-/* DOM */
+/* ── DOM refs ── */
 const urlInput          = document.getElementById('urlInput');
 const urlGoBtn          = document.getElementById('urlGoBtn');
 const tabSingle         = document.getElementById('tabSingle');
 const tabBulk           = document.getElementById('tabBulk');
+const tabUrlExtractor   = document.getElementById('tabUrlExtractor');
 const tabHistory        = document.getElementById('tabHistory');
 const tabPrint          = document.getElementById('tabPrint');
 const panelSingle       = document.getElementById('panelSingle');
 const panelBulk         = document.getElementById('panelBulk');
+const panelUrlExtractor = document.getElementById('panelUrlExtractor');
 const panelHistory      = document.getElementById('panelHistory');
 const panelPrint        = document.getElementById('panelPrint');
 const extractBtn        = document.getElementById('extractBtn');
@@ -570,8 +706,6 @@ const doPrintBtn        = document.getElementById('doPrintBtn');
 const statusPrint       = document.getElementById('statusPrint');
 const footerText        = document.getElementById('footerText');
 const printRoot         = document.getElementById('printRoot');
-
-// NEW
 const modeContinuous    = document.getElementById('modeContinuous');
 const modeCustomUrls    = document.getElementById('modeCustomUrls');
 const urlListPanel      = document.getElementById('urlListPanel');
@@ -581,24 +715,48 @@ const validateUrlsBtn   = document.getElementById('validateUrlsBtn');
 const clearUrlListBtn   = document.getElementById('clearUrlListBtn');
 const urlListValidated  = document.getElementById('urlListValidated');
 
-/* STATE */
-let singleText      = '';
-let singleTitle     = '';
-let singleUrl       = '';
-let bulkText        = '';
-let bulkRunning     = false;
-let bulkStopped     = false;
-let bulkChunks      = [];
-let bulkFirstTitle  = '';
-let bulkLastTitle   = '';
-let bulkCount       = 0;
-let bulkStartUrl    = '';
-let activeHistSub   = 'extracts';
-let printData       = null;
-let bulkMode        = 'continuous'; // 'continuous' | 'custom'
-let customUrlList   = []; // validated custom URLs
+/* BUE refs */
+const novelPageInput    = document.getElementById('novelPageInput');
+const bueFetchBtn       = document.getElementById('bueFetchBtn');
+const bueLoader         = document.getElementById('bueLoader');
+const statusBue         = document.getElementById('statusBue');
+const bueResults        = document.getElementById('bueResults');
+const bueNovelTitle     = document.getElementById('bueNovelTitle');
+const bueTotalBadge     = document.getElementById('bueTotalBadge');
+const bueNovelBadge     = document.getElementById('bueNovelBadge');
+const bueOrderSeg       = document.getElementById('bueOrderSeg');
+const bueRangeFrom      = document.getElementById('bueRangeFrom');
+const bueRangeTo        = document.getElementById('bueRangeTo');
+const bueRangeApply     = document.getElementById('bueRangeApply');
+const bueChapterList    = document.getElementById('bueChapterList');
+const bueShownCount     = document.getElementById('bueShownCount');
+const bueTotalCount     = document.getElementById('bueTotalCount');
+const bueSelectedCount  = document.getElementById('bueSelectedCount');
+const bueSelAll         = document.getElementById('bueSelAll');
+const bueSelNone        = document.getElementById('bueSelNone');
+const bueSelInvert      = document.getElementById('bueSelInvert');
+const bueSendBtn        = document.getElementById('bueSendBtn');
+const bueCopyUrlsBtn    = document.getElementById('bueCopyUrlsBtn');
+const bueResetBtn       = document.getElementById('bueResetBtn');
+const bueSentConfirm    = document.getElementById('bueSentConfirm');
 
-/* UTILS */
+/* ── STATE ── */
+let singleText = '', singleTitle = '', singleUrl = '';
+let bulkText = '', bulkRunning = false, bulkStopped = false;
+let bulkChunks = [], bulkFirstTitle = '', bulkLastTitle = '', bulkCount = 0, bulkStartUrl = '';
+let activeHistSub = 'extracts';
+let printData = null;
+let bulkMode = 'continuous';
+let customUrlList = [];
+
+/* BUE state */
+let bueAllChapters   = []; // { title, url } master list (asc from page)
+let bueFiltered      = []; // currently displayed (after order + range)
+let bueSelected      = new Set(); // selected indices into bueFiltered
+let bueOrder         = 'asc';
+let bueRangeActive   = { from: 1, to: Infinity };
+
+/* ── UTILS ── */
 function showStatus(el, msg, type = 'info', persist = false) {
   el.textContent = msg; el.className = 'status ' + type; el.style.display = 'block';
   if (!persist) setTimeout(() => { el.style.display = 'none'; }, 4500);
@@ -611,27 +769,30 @@ function trunc(s, n) { return s && s.length>n ? s.slice(0,n)+'…' : (s||'—');
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function novelBaseUrl(url) { try { const u = new URL(url); const p = u.pathname.split('/').filter(Boolean); return p.length>=2 ? `${u.origin}/${p[0]}/${p[1]}` : null; } catch { return null; } }
 
-/* TAB SWITCHING */
+/* ── TAB SWITCHING ── */
+const allTabs   = [tabSingle, tabBulk, tabUrlExtractor, tabHistory, tabPrint];
+const allPanels = [panelSingle, panelBulk, panelUrlExtractor, panelHistory, panelPrint];
 function switchTab(tab, panel) {
-  [tabSingle,tabBulk,tabHistory,tabPrint].forEach(t=>t.classList.remove('active'));
-  [panelSingle,panelBulk,panelHistory,panelPrint].forEach(p=>p.classList.remove('active'));
+  allTabs.forEach(t => t.classList.remove('active'));
+  allPanels.forEach(p => p.classList.remove('active'));
   tab.classList.add('active'); panel.classList.add('active');
 }
-tabSingle.addEventListener('click',  ()=>switchTab(tabSingle,panelSingle));
-tabBulk.addEventListener('click',    ()=>switchTab(tabBulk,panelBulk));
-tabHistory.addEventListener('click', ()=>{ switchTab(tabHistory,panelHistory); renderHistory(); });
-tabPrint.addEventListener('click',   ()=>{ switchTab(tabPrint,panelPrint); syncPrintPanel(); });
+tabSingle.addEventListener('click',        () => switchTab(tabSingle, panelSingle));
+tabBulk.addEventListener('click',          () => switchTab(tabBulk, panelBulk));
+tabUrlExtractor.addEventListener('click',  () => switchTab(tabUrlExtractor, panelUrlExtractor));
+tabHistory.addEventListener('click',       () => { switchTab(tabHistory, panelHistory); renderHistory(); });
+tabPrint.addEventListener('click',         () => { switchTab(tabPrint, panelPrint); syncPrintPanel(); });
 
-/* URL BAR */
+/* ── URL BAR ── */
 urlGoBtn.addEventListener('click', loadUrl);
-urlInput.addEventListener('keydown', e=>{ if(e.key==='Enter') loadUrl(); });
+urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadUrl(); });
 function loadUrl() {
   const url = urlInput.value.trim();
   if (!url) return;
-  if (!url.includes('novelbin.com')) { showStatus(statusSingle,'⚠ Must be a novelbin.com URL.','error',true); switchTab(tabSingle,panelSingle); return; }
-  footerText.textContent = `Loaded: ${trunc(url,55)}`;
-  switchTab(tabSingle,panelSingle);
-  showStatus(statusSingle,'✓ URL set — click Extract to scrape this chapter.','info',true);
+  if (!url.includes('novelbin.com')) { showStatus(statusSingle, '⚠ Must be a novelbin.com URL.', 'error', true); switchTab(tabSingle, panelSingle); return; }
+  footerText.textContent = `Loaded: ${trunc(url, 55)}`;
+  switchTab(tabSingle, panelSingle);
+  showStatus(statusSingle, '✓ URL set — click Extract to scrape this chapter.', 'info', true);
 }
 
 /* ── BULK MODE SWITCHER ── */
@@ -646,54 +807,36 @@ modeCustomUrls.addEventListener('click', () => {
   urlListPanel.classList.add('visible');
 });
 
-/* ── CUSTOM URL LIST LOGIC ── */
+/* ── CUSTOM URL LIST ── */
 function parseUrlList(raw) {
-  return raw.split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0)
-    .filter((v, i, a) => a.indexOf(v) === i); // dedupe
+  return raw.split('\n').map(l => l.trim()).filter(l => l.length > 0).filter((v, i, a) => a.indexOf(v) === i);
 }
-
 urlListInput.addEventListener('input', () => {
   const urls = parseUrlList(urlListInput.value);
-  urlListMeta.textContent = urls.length + ' URL' + (urls.length===1?'':'s');
+  urlListMeta.textContent = urls.length + ' URL' + (urls.length === 1 ? '' : 's');
   urlListValidated.classList.remove('visible');
 });
-
 validateUrlsBtn.addEventListener('click', () => {
   const urls = parseUrlList(urlListInput.value);
-  if (urls.length === 0) {
-    urlListValidated.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);">No URLs to validate.</div>';
-    urlListValidated.classList.add('visible');
-    return;
-  }
-  const valid = []; const invalid = [];
+  if (urls.length === 0) { urlListValidated.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);">No URLs to validate.</div>'; urlListValidated.classList.add('visible'); return; }
+  const valid = [], invalid = [];
   const html = urls.map((url, i) => {
     const ok = url.includes('novelbin.com');
     if (ok) valid.push(url); else invalid.push(url);
-    return `<div class="url-validated-item">
-      <span class="url-validated-num">#${i+1}</span>
-      <span class="url-validated-url ${ok?'':'url-validated-bad'}">${ok?'✓':'✗'} ${esc(trunc(url,55))}</span>
-    </div>`;
+    return `<div class="url-validated-item"><span class="url-validated-num">#${i+1}</span><span class="url-validated-url ${ok?'':'url-validated-bad'}">${ok?'✓':'✗'} ${esc(trunc(url,55))}</span></div>`;
   }).join('');
-  urlListValidated.innerHTML = html;
-  urlListValidated.classList.add('visible');
-  customUrlList = valid;
-  urlListMeta.textContent = `${valid.length} valid, ${invalid.length} invalid`;
+  urlListValidated.innerHTML = html; urlListValidated.classList.add('visible');
+  customUrlList = valid; urlListMeta.textContent = `${valid.length} valid, ${invalid.length} invalid`;
 });
-
 clearUrlListBtn.addEventListener('click', () => {
-  urlListInput.value = '';
-  urlListMeta.textContent = '0 URLs';
-  urlListValidated.classList.remove('visible');
-  customUrlList = [];
+  urlListInput.value = ''; urlListMeta.textContent = '0 URLs'; urlListValidated.classList.remove('visible'); customUrlList = [];
 });
 
-/* FETCH + EXTRACT */
+/* ── FETCH + EXTRACT ── */
 const PROXY = 'https://corsproxy.io/?';
 async function fetchPageHtml(url) {
-  try { const r = await fetch(url, { credentials:'omit', cache:'no-store' }); if (r.ok) return await r.text(); } catch {}
-  try { const r = await fetch(PROXY + encodeURIComponent(url), { cache:'no-store' }); if (r.ok) return await r.text(); } catch {}
+  try { const r = await fetch(url, { credentials: 'omit', cache: 'no-store' }); if (r.ok) return await r.text(); } catch {}
+  try { const r = await fetch(PROXY + encodeURIComponent(url), { cache: 'no-store' }); if (r.ok) return await r.text(); } catch {}
   throw new Error('Could not fetch the page. Try installing the companion browser extension for direct DOM access.');
 }
 function extractFromHtml(html, url) {
@@ -703,8 +846,8 @@ function extractFromHtml(html, url) {
   const contentEl = doc.querySelector('#chr-content');
   if (!contentEl) return { title, content: '', error: 'Chapter content not found.' };
   const clone = contentEl.cloneNode(true);
-  clone.querySelectorAll('script,style,.pubfuture,[id^="pf-"],hr').forEach(el=>el.remove());
-  const lines = []; clone.querySelectorAll('h4, p').forEach(el=>{ const t=el.textContent.trim(); if(t) lines.push(t); });
+  clone.querySelectorAll('script,style,.pubfuture,[id^="pf-"],hr').forEach(el => el.remove());
+  const lines = []; clone.querySelectorAll('h4, p').forEach(el => { const t = el.textContent.trim(); if (t) lines.push(t); });
   const content = lines.join('\n\n');
   if (!content) return { title, content: '', error: 'No text content found.' };
   return { title, content, error: null };
@@ -718,122 +861,398 @@ function getNextUrlFromHtml(html) {
   try { return { nextUrl: new URL(href, 'https://novelbin.com').href, isLast: false }; } catch { return { nextUrl: href, isLast: false }; }
 }
 
-/* SINGLE EXTRACT */
+/* ══════════════════════════════════════════════════════════
+   BULK URL EXTRACTOR — core logic
+══════════════════════════════════════════════════════════ */
+
+/**
+ * NovelBin novel pages embed chapter lists in the HTML.
+ * Strategy:
+ *  1. Direct fetch the novel page (or via corsproxy).
+ *  2. Parse the DOM for the chapter list — NovelBin uses
+ *     <ul id="ul-chapter-list"> or similar structures.
+ *     We look for <a> tags whose href matches /b/<slug>/chapter-*
+ *     OR anchors inside the #tab-chapters-title section.
+ *  3. Also try the dedicated AJAX endpoint NovelBin uses to
+ *     load chapter lists: /ajax/chapter-option?novelId=...
+ *     which returns an <option> list or chapter list HTML.
+ */
+
+function bueExtractChaptersFromHtml(html, novelSlug) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const chapters = [];
+  const seen = new Set();
+
+  // Method 1: standard chapter list ul
+  const listEls = doc.querySelectorAll(
+    '#ul-chapter-list a, .list-chapter a, #list-chapter a, .tab-content a[href*="/b/"]'
+  );
+  listEls.forEach(a => {
+    const href = a.getAttribute('href') || '';
+    if (!href.includes('/b/') || href.endsWith('/b/') || href.endsWith('/null')) return;
+    let url;
+    try { url = new URL(href, 'https://novelbin.com').href; } catch { return; }
+    if (seen.has(url)) return;
+    seen.add(url);
+    const title = (a.getAttribute('title') || a.textContent || '').trim().replace(/\s+/g,' ') || url.split('/').pop();
+    chapters.push({ title, url });
+  });
+
+  // Method 2: any anchor on the page with the novel slug + chapter pattern
+  if (chapters.length === 0) {
+    const slug = novelSlug || '';
+    const pattern = slug ? new RegExp('/b/' + slug.replace(/[-]/g,'[\\-]') + '/', 'i') : /\/b\/[^/]+\/chapter/i;
+    doc.querySelectorAll('a[href]').forEach(a => {
+      const href = a.getAttribute('href') || '';
+      if (!pattern.test(href)) return;
+      if (href.includes('#') && !href.includes('/chapter')) return;
+      let url;
+      try { url = new URL(href, 'https://novelbin.com').href; } catch { return; }
+      if (seen.has(url)) return;
+      seen.add(url);
+      const title = (a.getAttribute('title') || a.textContent || '').trim().replace(/\s+/g,' ') || url.split('/').pop();
+      chapters.push({ title, url });
+    });
+  }
+
+  // Method 3: parse <option value="..."> (some AJAX responses)
+  if (chapters.length === 0) {
+    doc.querySelectorAll('option[value]').forEach(opt => {
+      const href = opt.getAttribute('value') || '';
+      if (!href.includes('/b/')) return;
+      let url;
+      try { url = new URL(href, 'https://novelbin.com').href; } catch { return; }
+      if (seen.has(url)) return;
+      seen.add(url);
+      const title = opt.textContent.trim() || url.split('/').pop();
+      chapters.push({ title, url });
+    });
+  }
+
+  return chapters;
+}
+
+function bueGetNovelTitle(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const t = doc.querySelector('h3.title, h1.title, .book-name, h1, title');
+  return t ? t.textContent.trim().split('|')[0].trim() : '';
+}
+
+function bueGetNovelId(html) {
+  // NovelBin sometimes embeds the novelId in script tags or data attrs
+  const m = html.match(/novelId['":\s]+(\d+)/i) || html.match(/data-novel-id=['""](\d+)['""]/) || html.match(/"novel_id"\s*:\s*"?(\d+)"?/);
+  return m ? m[1] : null;
+}
+
+function bueSlugFromUrl(url) {
+  try {
+    const parts = new URL(url).pathname.split('/').filter(Boolean);
+    return parts[1] || '';
+  } catch { return ''; }
+}
+
+async function bueFetchChapterList(rawUrl) {
+  // Normalise URL — strip fragment
+  let baseUrl = rawUrl.trim().replace(/#.*$/, '');
+  if (!baseUrl.startsWith('http')) baseUrl = 'https://' + baseUrl;
+  const slug = bueSlugFromUrl(baseUrl);
+
+  const results = [];
+  let novelTitle = '';
+  let html = '';
+
+  // Step 1 — fetch the main novel page
+  try {
+    html = await fetchPageHtml(baseUrl);
+    novelTitle = bueGetNovelTitle(html) || slug;
+    const fromPage = bueExtractChaptersFromHtml(html, slug);
+    fromPage.forEach(c => results.push(c));
+  } catch(e) {
+    throw new Error('Failed to fetch novel page: ' + e.message);
+  }
+
+  // Step 2 — try the AJAX chapter-list endpoint (NovelBin loads chapters via AJAX)
+  // Endpoint: /ajax/chapter-option?novelId=<id>
+  // Also try: /ajax/chapter-archive?novelId=<id>
+  const novelId = bueGetNovelId(html);
+  if (novelId) {
+    const ajaxUrls = [
+      `https://novelbin.com/ajax/chapter-option?novelId=${novelId}`,
+      `https://novelbin.com/ajax/chapter-archive?novelId=${novelId}`,
+    ];
+    for (const aUrl of ajaxUrls) {
+      try {
+        const ajaxHtml = await fetchPageHtml(aUrl);
+        const fromAjax = bueExtractChaptersFromHtml(ajaxHtml, slug);
+        if (fromAjax.length > results.length) {
+          results.length = 0;
+          fromAjax.forEach(c => results.push(c));
+        }
+        if (fromAjax.length > 0) break;
+      } catch {}
+    }
+  }
+
+  // Step 3 — try fetching the #tab-chapters-title page variant
+  if (results.length === 0) {
+    try {
+      const tabHtml = await fetchPageHtml(baseUrl + '#tab-chapters-title');
+      const fromTab = bueExtractChaptersFromHtml(tabHtml, slug);
+      fromTab.forEach(c => results.push(c));
+    } catch {}
+  }
+
+  return { chapters: results, novelTitle, slug };
+}
+
+/* BUE UI */
+function bueRenderList() {
+  bueChapterList.innerHTML = '';
+  bueSelected.clear();
+  applyBueFilters();
+}
+
+function applyBueFilters() {
+  let list = [...bueAllChapters];
+  // Order
+  if (bueOrder === 'desc') list = list.reverse();
+  // Range
+  const from = Math.max(1, bueRangeActive.from || 1);
+  const to   = bueRangeActive.to === Infinity ? list.length : Math.min(list.length, bueRangeActive.to);
+  bueFiltered = list.slice(from - 1, to);
+  renderBueItems();
+}
+
+function renderBueItems() {
+  bueShownCount.textContent = bueFiltered.length;
+  bueTotalCount.textContent = bueAllChapters.length;
+  bueChapterList.innerHTML = bueFiltered.map((ch, i) => `
+    <div class="bue-ch-item ${bueSelected.has(i) ? 'selected' : ''}" data-idx="${i}">
+      <div class="bue-ch-check"></div>
+      <span class="bue-ch-num">#${i+1}</span>
+      <span class="bue-ch-name" title="${esc(ch.title)}">${esc(trunc(ch.title, 50))}</span>
+      <span class="bue-ch-url" title="${esc(ch.url)}">${esc(trunc(ch.url, 36))}</span>
+    </div>
+  `).join('');
+  updateBueSelCount();
+}
+
+function updateBueSelCount() {
+  bueSelectedCount.textContent = bueSelected.size + ' selected';
+  const hasAny = bueSelected.size > 0;
+  bueSendBtn.disabled    = !hasAny;
+  bueCopyUrlsBtn.disabled = !hasAny;
+}
+
+bueChapterList.addEventListener('click', e => {
+  const item = e.target.closest('.bue-ch-item');
+  if (!item) return;
+  const idx = parseInt(item.dataset.idx);
+  if (bueSelected.has(idx)) { bueSelected.delete(idx); item.classList.remove('selected'); }
+  else                       { bueSelected.add(idx);    item.classList.add('selected'); }
+  updateBueSelCount();
+});
+
+bueSelAll.addEventListener('click',    () => { bueFiltered.forEach((_, i) => bueSelected.add(i)); renderBueItems(); });
+bueSelNone.addEventListener('click',   () => { bueSelected.clear(); renderBueItems(); });
+bueSelInvert.addEventListener('click', () => { bueFiltered.forEach((_, i) => { if (bueSelected.has(i)) bueSelected.delete(i); else bueSelected.add(i); }); renderBueItems(); });
+
+bueOrderSeg.querySelectorAll('.bue-seg-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    bueOrderSeg.querySelectorAll('.bue-seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    bueOrder = btn.dataset.order;
+    bueSelected.clear();
+    applyBueFilters();
+  });
+});
+
+bueRangeApply.addEventListener('click', () => {
+  const f = parseInt(bueRangeFrom.value) || 1;
+  const t = parseInt(bueRangeTo.value)   || Infinity;
+  bueRangeActive = { from: f, to: t };
+  bueSelected.clear();
+  applyBueFilters();
+  showStatus(statusBue, `✓ Range applied: chapters ${f}–${t === Infinity ? 'end' : t}`, 'info');
+});
+
+bueFetchBtn.addEventListener('click', async () => {
+  const raw = novelPageInput.value.trim();
+  if (!raw || !raw.includes('novelbin.com')) {
+    showStatus(statusBue, '⚠ Enter a valid novelbin.com novel URL.', 'error', true);
+    return;
+  }
+  // reset
+  bueAllChapters = []; bueFiltered = []; bueSelected.clear();
+  bueResults.classList.remove('visible');
+  bueSentConfirm.classList.remove('visible');
+  bueLoader.style.display = 'flex';
+  bueFetchBtn.disabled = true;
+  statusBue.style.display = 'none';
+
+  try {
+    const { chapters, novelTitle, slug } = await bueFetchChapterList(raw);
+    bueLoader.style.display = 'none';
+    bueFetchBtn.disabled = false;
+
+    if (chapters.length === 0) {
+      showStatus(statusBue,
+        '⚠ No chapters found on that page. NovelBin may require login or load chapters via JavaScript. ' +
+        'Try the browser extension or manually paste the chapter URLs in Bulk → Custom URL List.',
+        'warn', true);
+      return;
+    }
+
+    bueAllChapters = chapters;
+    bueNovelTitle.textContent = novelTitle || slug || 'Unknown Novel';
+    bueTotalBadge.textContent = chapters.length + ' chapters';
+    bueNovelBadge.textContent = slug || 'novel';
+    bueRangeFrom.max = chapters.length;
+    bueRangeTo.max   = chapters.length;
+    bueRangeActive   = { from: 1, to: Infinity };
+    bueOrder         = 'asc';
+    bueOrderSeg.querySelectorAll('.bue-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.order === 'asc'));
+    applyBueFilters();
+    bueResults.classList.add('visible');
+    showStatus(statusBue, `✓ Found ${chapters.length} chapters for "${novelTitle}". Select below.`, 'success');
+    footerText.textContent = `URL Extractor: ${chapters.length} chapters from "${trunc(novelTitle,35)}"`;
+  } catch(err) {
+    bueLoader.style.display = 'none';
+    bueFetchBtn.disabled = false;
+    showStatus(statusBue, '✗ ' + err.message, 'error', true);
+  }
+});
+
+novelPageInput.addEventListener('keydown', e => { if (e.key === 'Enter') bueFetchBtn.click(); });
+
+bueSendBtn.addEventListener('click', () => {
+  const selected = [...bueSelected].sort((a,b) => a-b).map(i => bueFiltered[i]);
+  if (selected.length === 0) return;
+  const urls = selected.map(c => c.url);
+
+  // Inject into Custom URL List in Bulk tab
+  urlListInput.value = urls.join('\n');
+  urlListMeta.textContent = urls.length + ' URLs';
+  urlListValidated.classList.remove('visible');
+  // switch to custom mode
+  bulkMode = 'custom';
+  modeCustomUrls.classList.add('active'); modeContinuous.classList.remove('active');
+  urlListPanel.classList.add('visible');
+
+  bueSentConfirm.textContent =
+    `✓ ${urls.length} chapter URL${urls.length===1?'':'s'} sent to Bulk → Custom URL List. ` +
+    `Switch to the "Till Latest" tab to start scraping.`;
+  bueSentConfirm.classList.add('visible');
+
+  showStatus(statusBue,
+    `✓ ${urls.length} URLs loaded into Bulk Scraper → Custom URL List!`,
+    'success', true);
+});
+
+bueCopyUrlsBtn.addEventListener('click', async () => {
+  const selected = [...bueSelected].sort((a,b) => a-b).map(i => bueFiltered[i]);
+  if (selected.length === 0) return;
+  const text = selected.map(c => c.url).join('\n');
+  try { await navigator.clipboard.writeText(text); } catch {}
+  showStatus(statusBue, `✓ ${selected.length} URLs copied to clipboard!`, 'success');
+  bueCopyUrlsBtn.textContent = '✓ Copied!';
+  setTimeout(() => { bueCopyUrlsBtn.textContent = '📋 Copy URLs'; }, 2000);
+});
+
+bueResetBtn.addEventListener('click', () => {
+  bueAllChapters = []; bueFiltered = []; bueSelected.clear();
+  bueResults.classList.remove('visible');
+  bueSentConfirm.classList.remove('visible');
+  novelPageInput.value = '';
+  statusBue.style.display = 'none';
+  bueChapterList.innerHTML = '';
+});
+
+/* ── SINGLE EXTRACT ── */
 extractBtn.addEventListener('click', async () => {
   const url = urlInput.value.trim() || window.location.href;
-  if (!url.includes('novelbin.com')) { showStatus(statusSingle,'⚠ Enter a novelbin.com chapter URL above first.','error',true); return; }
-  statusSingle.style.display='none'; loaderSingle.style.display='flex'; extractBtn.disabled=true;
+  if (!url.includes('novelbin.com')) { showStatus(statusSingle, '⚠ Enter a novelbin.com chapter URL above first.', 'error', true); return; }
+  statusSingle.style.display = 'none'; loaderSingle.style.display = 'flex'; extractBtn.disabled = true;
   try {
     const html = await fetchPageHtml(url);
     const { title, content, error } = extractFromHtml(html, url);
-    loaderSingle.style.display='none'; extractBtn.disabled=false;
-    if (error && !content) { showStatus(statusSingle,'✗ '+error,'error',true); return; }
-    singleText=content; singleTitle=title; singleUrl=url;
-    output.value=content; chapterTitle.textContent=title;
-    const s=calcStats(content); wordCount.textContent=s.words.toLocaleString()+' words'; charCount.textContent=s.chars.toLocaleString()+' chars';
-    copyBtn.disabled=printBtn.disabled=clearBtn.disabled=false;
-    autoSaveHistory({ type:'single', firstChapter:title, lastChapter:title, chaptersCount:1, text:content, novelUrl:novelBaseUrl(url) });
-    showStatus(statusSingle,`✓ Extracted & saved — ${s.words.toLocaleString()} words`,'success');
-    footerText.textContent=`Last extract: ${trunc(title,50)}`;
-  } catch(err) { loaderSingle.style.display='none'; extractBtn.disabled=false; showStatus(statusSingle,'✗ '+err.message,'error',true); }
+    loaderSingle.style.display = 'none'; extractBtn.disabled = false;
+    if (error && !content) { showStatus(statusSingle, '✗ ' + error, 'error', true); return; }
+    singleText = content; singleTitle = title; singleUrl = url;
+    output.value = content; chapterTitle.textContent = title;
+    const s = calcStats(content); wordCount.textContent = s.words.toLocaleString() + ' words'; charCount.textContent = s.chars.toLocaleString() + ' chars';
+    copyBtn.disabled = printBtn.disabled = clearBtn.disabled = false;
+    autoSaveHistory({ type: 'single', firstChapter: title, lastChapter: title, chaptersCount: 1, text: content, novelUrl: novelBaseUrl(url) });
+    showStatus(statusSingle, `✓ Extracted & saved — ${s.words.toLocaleString()} words`, 'success');
+    footerText.textContent = `Last extract: ${trunc(title, 50)}`;
+  } catch(err) { loaderSingle.style.display = 'none'; extractBtn.disabled = false; showStatus(statusSingle, '✗ ' + err.message, 'error', true); }
 });
 copyBtn.addEventListener('click', async () => {
   if (!singleText) return;
   try { await navigator.clipboard.writeText(singleText); } catch {}
-  showStatus(statusSingle,'✓ Copied to clipboard!','success');
-  copyBtn.textContent='✓ Copied!'; setTimeout(()=>{copyBtn.textContent='📋 Copy';},2000);
+  showStatus(statusSingle, '✓ Copied to clipboard!', 'success');
+  copyBtn.textContent = '✓ Copied!'; setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 2000);
 });
-printBtn.addEventListener('click', () => {
-  if (!singleText) return;
-  setPrintData(singleText, singleTitle, null);
-  switchTab(tabPrint,panelPrint); syncPrintPanel();
-});
+printBtn.addEventListener('click', () => { if (!singleText) return; setPrintData(singleText, singleTitle, null); switchTab(tabPrint, panelPrint); syncPrintPanel(); });
 clearBtn.addEventListener('click', () => {
-  singleText=''; singleTitle=''; singleUrl=''; output.value=''; chapterTitle.textContent='';
-  wordCount.textContent='0 words'; charCount.textContent='0 chars';
-  copyBtn.disabled=printBtn.disabled=clearBtn.disabled=true; statusSingle.style.display='none';
+  singleText = ''; singleTitle = ''; singleUrl = ''; output.value = ''; chapterTitle.textContent = '';
+  wordCount.textContent = '0 words'; charCount.textContent = '0 chars';
+  copyBtn.disabled = printBtn.disabled = clearBtn.disabled = true; statusSingle.style.display = 'none';
 });
 
-/* BULK SCRAPE */
+/* ── BULK SCRAPE ── */
 function setBulkUI(running) {
-  bulkRunning=running; bulkStartBtn.disabled=running; bulkStopBtn.disabled=!running;
-  if (running) {
-    progressWrap.classList.add('show'); progressLabel.textContent='SCRAPING...'; canvasIndicator.style.display='flex';
-    progressBarFill.classList.add('animated');
-  } else {
-    progressWrap.classList.remove('show'); canvasIndicator.style.display='none';
-    progressBarFill.classList.remove('animated');
-  }
+  bulkRunning = running; bulkStartBtn.disabled = running; bulkStopBtn.disabled = !running;
+  if (running) { progressWrap.classList.add('show'); progressLabel.textContent = 'SCRAPING...'; canvasIndicator.style.display = 'flex'; progressBarFill.classList.add('animated'); }
+  else         { progressWrap.classList.remove('show'); canvasIndicator.style.display = 'none'; progressBarFill.classList.remove('animated'); }
 }
-
 bulkStartBtn.addEventListener('click', async () => {
-  // reset state
-  bulkStopped=false; bulkChunks=[]; bulkFirstTitle=''; bulkLastTitle=''; bulkCount=0;
-  bulkOutput.value=''; bulkWordCount.textContent='0 words'; bulkCharCount.textContent='0 chars';
-  bulkCopyBtn.disabled=bulkPrintBtn.disabled=bulkClearBtn.disabled=true;
-  statusBulk.style.display='none'; bulkChapterTitle.textContent='';
-  progressBarFill.style.width='5%';
-
+  bulkStopped = false; bulkChunks = []; bulkFirstTitle = ''; bulkLastTitle = ''; bulkCount = 0;
+  bulkOutput.value = ''; bulkWordCount.textContent = '0 words'; bulkCharCount.textContent = '0 chars';
+  bulkCopyBtn.disabled = bulkPrintBtn.disabled = bulkClearBtn.disabled = true;
+  statusBulk.style.display = 'none'; bulkChapterTitle.textContent = '';
+  progressBarFill.style.width = '5%';
   if (bulkMode === 'custom') {
-    // ── CUSTOM URL LIST MODE ──
-    const rawUrls = parseUrlList(urlListInput.value).filter(u=>u.includes('novelbin.com'));
-    if (rawUrls.length === 0) {
-      showStatus(statusBulk,'⚠ No valid novelbin.com URLs in list. Paste URLs and validate first.','error',true);
-      return;
-    }
-    customUrlList = rawUrls;
-    bulkStartUrl = rawUrls[0];
-    progressCurrent.textContent=`0 / ${rawUrls.length} chapters…`;
-    canvasIndicatorText.textContent=`Custom list: ${rawUrls.length} URLs`;
-    setBulkUI(true);
-    showStatus(statusBulk,`🚀 Scraping ${rawUrls.length} custom URLs…`,'warn',true);
+    const rawUrls = parseUrlList(urlListInput.value).filter(u => u.includes('novelbin.com'));
+    if (rawUrls.length === 0) { showStatus(statusBulk, '⚠ No valid novelbin.com URLs in list. Paste URLs and validate first.', 'error', true); return; }
+    customUrlList = rawUrls; bulkStartUrl = rawUrls[0];
+    progressCurrent.textContent = `0 / ${rawUrls.length} chapters…`;
+    canvasIndicatorText.textContent = `Custom list: ${rawUrls.length} URLs`;
+    setBulkUI(true); showStatus(statusBulk, `🚀 Scraping ${rawUrls.length} custom URLs…`, 'warn', true);
     runCustomUrlLoop(rawUrls);
   } else {
-    // ── CONTINUOUS MODE ──
     const url = urlInput.value.trim();
-    if (!url || !url.includes('novelbin.com')) {
-      showStatus(statusBulk,'⚠ Enter a novelbin.com chapter URL above first.','error',true);
-      return;
-    }
-    bulkStartUrl=url;
-    progressCurrent.textContent='Fetching first chapter…';
-    canvasIndicatorText.textContent='0 chapters scraped';
-    setBulkUI(true);
-    showStatus(statusBulk,'🚀 Scraping via hidden canvas — no tab opened!','warn',true);
+    if (!url || !url.includes('novelbin.com')) { showStatus(statusBulk, '⚠ Enter a novelbin.com chapter URL above first.', 'error', true); return; }
+    bulkStartUrl = url; progressCurrent.textContent = 'Fetching first chapter…';
+    canvasIndicatorText.textContent = '0 chapters scraped';
+    setBulkUI(true); showStatus(statusBulk, '🚀 Scraping via hidden canvas — no tab opened!', 'warn', true);
     runBulkLoop(url);
   }
 });
-
-bulkStopBtn.addEventListener('click', () => {
-  bulkStopped=true; setBulkUI(false); progressLabel.textContent='STOPPING…';
-  showStatus(statusBulk,'⏹ Stopping after current chapter…','warn',true);
-});
+bulkStopBtn.addEventListener('click', () => { bulkStopped = true; setBulkUI(false); progressLabel.textContent = 'STOPPING…'; showStatus(statusBulk, '⏹ Stopping after current chapter…', 'warn', true); });
 
 async function runBulkLoop(startUrl) {
   let currentUrl = startUrl;
   while (!bulkStopped) {
     try {
-      progressCurrent.textContent=`Fetching: ${trunc(currentUrl,55)}`;
+      progressCurrent.textContent = `Fetching: ${trunc(currentUrl, 55)}`;
       const html = await fetchPageHtml(currentUrl);
       const { title, content, error } = extractFromHtml(html, currentUrl);
-      if (error && !content) { setBulkUI(false); showStatus(statusBulk,'✗ '+error,'error',true); break; }
-      bulkCount++; bulkLastTitle=title;
-      if (!bulkFirstTitle) bulkFirstTitle=title;
-      const chunk=`\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
-      bulkChunks.push({ title, content, raw: chunk });
-      updateBulkOutput();
-      chapterCounter.textContent=bulkCount+' chapter'+(bulkCount===1?'':'s');
-      bulkChapterTitle.textContent=title;
-      canvasIndicatorText.textContent=`${bulkCount} chapter${bulkCount===1?'':'s'} scraped`;
-      const nav=getNextUrlFromHtml(html);
-      if (nav.isLast||!nav.nextUrl) { finishBulk('continuous'); break; }
-      currentUrl=nav.nextUrl;
-      await sleep(800);
-    } catch(err) { setBulkUI(false); showStatus(statusBulk,'✗ Fetch error: '+err.message,'error',true); break; }
+      if (error && !content) { setBulkUI(false); showStatus(statusBulk, '✗ ' + error, 'error', true); break; }
+      bulkCount++; bulkLastTitle = title;
+      if (!bulkFirstTitle) bulkFirstTitle = title;
+      const chunk = `\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
+      bulkChunks.push({ title, content, raw: chunk }); updateBulkOutput();
+      chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount === 1 ? '' : 's');
+      bulkChapterTitle.textContent = title; canvasIndicatorText.textContent = `${bulkCount} chapter${bulkCount===1?'':'s'} scraped`;
+      const nav = getNextUrlFromHtml(html);
+      if (nav.isLast || !nav.nextUrl) { finishBulk('continuous'); break; }
+      currentUrl = nav.nextUrl; await sleep(800);
+    } catch(err) { setBulkUI(false); showStatus(statusBulk, '✗ Fetch error: ' + err.message, 'error', true); break; }
   }
   if (bulkStopped && bulkText) {
-    autoSaveHistory({ type:'bulk', firstChapter:bulkFirstTitle, lastChapter:bulkLastTitle, chaptersCount:bulkCount, text:bulkText, novelUrl:novelBaseUrl(bulkStartUrl) });
-    showStatus(statusBulk,`⏹ Stopped — ${bulkCount} chapters saved to history.`,'warn',true);
+    autoSaveHistory({ type: 'bulk', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
+    showStatus(statusBulk, `⏹ Stopped — ${bulkCount} chapters saved to history.`, 'warn', true);
   }
 }
 
@@ -843,209 +1262,164 @@ async function runCustomUrlLoop(urls) {
     if (bulkStopped) break;
     const url = urls[i];
     try {
-      progressCurrent.textContent=`[${i+1}/${total}] Fetching: ${trunc(url,50)}`;
-      // update progress bar
-      progressBarFill.style.width = Math.round(((i) / total) * 100) + '%';
+      progressCurrent.textContent = `[${i+1}/${total}] Fetching: ${trunc(url, 50)}`;
+      progressBarFill.style.width = Math.round((i / total) * 100) + '%';
       const html = await fetchPageHtml(url);
       const { title, content, error } = extractFromHtml(html, url);
-      if (error && !content) {
-        // skip this URL and continue
-        console.warn('Skip', url, error);
-        canvasIndicatorText.textContent=`[${i+1}/${total}] Skipped: ${trunc(title||url,30)}`;
-        await sleep(400); continue;
-      }
-      bulkCount++; bulkLastTitle=title;
-      if (!bulkFirstTitle) bulkFirstTitle=title;
-      const chunk=`\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
-      bulkChunks.push({ title, content, raw: chunk });
-      updateBulkOutput();
-      chapterCounter.textContent=bulkCount+' chapter'+(bulkCount===1?'':'s');
-      bulkChapterTitle.textContent=`[${i+1}/${total}] ${title}`;
-      canvasIndicatorText.textContent=`${bulkCount}/${total} scraped`;
+      if (error && !content) { canvasIndicatorText.textContent = `[${i+1}/${total}] Skipped: ${trunc(title||url,30)}`; await sleep(400); continue; }
+      bulkCount++; bulkLastTitle = title;
+      if (!bulkFirstTitle) bulkFirstTitle = title;
+      const chunk = `\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
+      bulkChunks.push({ title, content, raw: chunk }); updateBulkOutput();
+      chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount===1?'':'s');
+      bulkChapterTitle.textContent = `[${i+1}/${total}] ${title}`;
+      canvasIndicatorText.textContent = `${bulkCount}/${total} scraped`;
       await sleep(800);
-    } catch(err) {
-      // network error on this URL — skip and continue
-      canvasIndicatorText.textContent=`[${i+1}/${total}] Error, skipping…`;
-      await sleep(600);
-    }
+    } catch(err) { canvasIndicatorText.textContent = `[${i+1}/${total}] Error, skipping…`; await sleep(600); }
   }
-  if (!bulkStopped) {
-    progressBarFill.style.width='100%';
-    finishBulk('custom');
-  } else if (bulkText) {
-    setBulkUI(false);
-    autoSaveHistory({ type:'custom', firstChapter:bulkFirstTitle, lastChapter:bulkLastTitle, chaptersCount:bulkCount, text:bulkText, novelUrl:novelBaseUrl(bulkStartUrl) });
-    showStatus(statusBulk,`⏹ Stopped — ${bulkCount} chapters saved to history.`,'warn',true);
-  }
+  if (!bulkStopped) { progressBarFill.style.width = '100%'; finishBulk('custom'); }
+  else if (bulkText) { setBulkUI(false); autoSaveHistory({ type: 'custom', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) }); showStatus(statusBulk, `⏹ Stopped — ${bulkCount} chapters saved to history.`, 'warn', true); }
 }
 
 function updateBulkOutput() {
-  const fullText = bulkChunks.map(c=>c.raw).join('');
-  bulkText=fullText; bulkOutput.value=fullText;
-  const s=calcStats(fullText);
-  bulkWordCount.textContent=s.words.toLocaleString()+' words'; bulkCharCount.textContent=s.chars.toLocaleString()+' chars';
-  bulkCopyBtn.disabled=bulkPrintBtn.disabled=bulkClearBtn.disabled=false;
+  const fullText = bulkChunks.map(c => c.raw).join('');
+  bulkText = fullText; bulkOutput.value = fullText;
+  const s = calcStats(fullText);
+  bulkWordCount.textContent = s.words.toLocaleString() + ' words'; bulkCharCount.textContent = s.chars.toLocaleString() + ' chars';
+  bulkCopyBtn.disabled = bulkPrintBtn.disabled = bulkClearBtn.disabled = false;
 }
-
 function finishBulk(type) {
-  setBulkUI(false);
-  bulkChapterTitle.textContent=`Done — ${bulkCount} chapters`;
-  autoSaveHistory({ type: type==='custom'?'custom':'bulk', firstChapter:bulkFirstTitle, lastChapter:bulkLastTitle, chaptersCount:bulkCount, text:bulkText, novelUrl:novelBaseUrl(bulkStartUrl) });
-  const s=calcStats(bulkText);
-  showStatus(statusBulk,`✓ Done — ${bulkCount} chapters scraped & saved!`,'success',true);
-  footerText.textContent=`Bulk complete: ${bulkCount} chapters, ${s.words.toLocaleString()} words`;
+  setBulkUI(false); bulkChapterTitle.textContent = `Done — ${bulkCount} chapters`;
+  autoSaveHistory({ type: type === 'custom' ? 'custom' : 'bulk', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
+  const s = calcStats(bulkText);
+  showStatus(statusBulk, `✓ Done — ${bulkCount} chapters scraped & saved!`, 'success', true);
+  footerText.textContent = `Bulk complete: ${bulkCount} chapters, ${s.words.toLocaleString()} words`;
 }
-
 bulkCopyBtn.addEventListener('click', async () => {
   if (!bulkText) return;
   try { await navigator.clipboard.writeText(bulkText); } catch {}
-  showStatus(statusBulk,'✓ Copied!','success');
-  bulkCopyBtn.textContent='✓ Copied!'; setTimeout(()=>{bulkCopyBtn.textContent='📋 Copy';},2000);
+  showStatus(statusBulk, '✓ Copied!', 'success');
+  bulkCopyBtn.textContent = '✓ Copied!'; setTimeout(() => { bulkCopyBtn.textContent = '📋 Copy'; }, 2000);
 });
-bulkPrintBtn.addEventListener('click', () => {
-  if (!bulkText) return;
-  setPrintData(bulkText,`${bulkFirstTitle} → ${bulkLastTitle}`,bulkChunks);
-  switchTab(tabPrint,panelPrint); syncPrintPanel();
-});
+bulkPrintBtn.addEventListener('click', () => { if (!bulkText) return; setPrintData(bulkText, `${bulkFirstTitle} → ${bulkLastTitle}`, bulkChunks); switchTab(tabPrint, panelPrint); syncPrintPanel(); });
 bulkClearBtn.addEventListener('click', () => {
-  bulkText=''; bulkChunks=[]; bulkFirstTitle=''; bulkLastTitle=''; bulkCount=0;
-  bulkOutput.value=''; bulkChapterTitle.textContent='';
-  bulkWordCount.textContent='0 words'; bulkCharCount.textContent='0 chars';
-  bulkCopyBtn.disabled=bulkPrintBtn.disabled=bulkClearBtn.disabled=true; statusBulk.style.display='none';
+  bulkText = ''; bulkChunks = []; bulkFirstTitle = ''; bulkLastTitle = ''; bulkCount = 0;
+  bulkOutput.value = ''; bulkChapterTitle.textContent = '';
+  bulkWordCount.textContent = '0 words'; bulkCharCount.textContent = '0 chars';
+  bulkCopyBtn.disabled = bulkPrintBtn.disabled = bulkClearBtn.disabled = true; statusBulk.style.display = 'none';
 });
 
-/* HISTORY */
+/* ── HISTORY ── */
 function autoSaveHistory(entry) {
   const words = entry.text.trim() ? entry.text.trim().split(/\s+/).length : 0;
   const h = { ...entry, id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), timestamp: Date.now(), words, chars: entry.text.length };
-  delete h.text;
-  storageSet('nb_text_'+h.id, entry.text);
+  delete h.text; storageSet('nb_text_'+h.id, entry.text);
   let hist = storageGet(HISTORY_KEY, []);
   hist.unshift(h);
-  if (hist.length>MAX_HISTORY) { hist.slice(MAX_HISTORY).forEach(old=>{try{localStorage.removeItem('nb_text_'+old.id);}catch{}}); hist=hist.slice(0,MAX_HISTORY); }
+  if (hist.length > MAX_HISTORY) { hist.slice(MAX_HISTORY).forEach(old => { try { localStorage.removeItem('nb_text_'+old.id); } catch {} }); hist = hist.slice(0, MAX_HISTORY); }
   storageSet(HISTORY_KEY, hist);
 }
 function loadHistText(id) { return storageGet('nb_text_'+id, ''); }
-
-subTabExtracts.addEventListener('click', ()=>{ activeHistSub='extracts'; subTabExtracts.classList.add('active'); subTabBookmarks.classList.remove('active'); extractsList.style.display=''; bookmarksList.style.display='none'; renderExtracts(); });
-subTabBookmarks.addEventListener('click', ()=>{ activeHistSub='bookmarks'; subTabBookmarks.classList.add('active'); subTabExtracts.classList.remove('active'); bookmarksList.style.display=''; extractsList.style.display='none'; renderBookmarkLog(); });
-
+subTabExtracts.addEventListener('click', () => { activeHistSub = 'extracts'; subTabExtracts.classList.add('active'); subTabBookmarks.classList.remove('active'); extractsList.style.display = ''; bookmarksList.style.display = 'none'; renderExtracts(); });
+subTabBookmarks.addEventListener('click', () => { activeHistSub = 'bookmarks'; subTabBookmarks.classList.add('active'); subTabExtracts.classList.remove('active'); bookmarksList.style.display = ''; extractsList.style.display = 'none'; renderBookmarkLog(); });
 async function renderExtracts() {
-  const hist=storageGet(HISTORY_KEY,[]);
-  histCountBadge.textContent=hist.length;
-  if (hist.length===0) { extractsList.innerHTML=`<div class="hist-empty"><div class="icon">📭</div><div class="msg">No extracts yet.</div></div>`; return; }
-  extractsList.innerHTML=hist.map(e=>{
-    const isBulk=e.type==='bulk'; const isCustom=e.type==='custom';
-    const range=(isBulk||isCustom)&&e.firstChapter!==e.lastChapter ? `${trunc(e.firstChapter,24)} → ${trunc(e.lastChapter,24)}` : trunc(e.firstChapter,48);
+  const hist = storageGet(HISTORY_KEY, []); histCountBadge.textContent = hist.length;
+  if (hist.length === 0) { extractsList.innerHTML = `<div class="hist-empty"><div class="icon">📭</div><div class="msg">No extracts yet.</div></div>`; return; }
+  extractsList.innerHTML = hist.map(e => {
+    const isBulk = e.type === 'bulk', isCustom = e.type === 'custom';
+    const range = (isBulk||isCustom) && e.firstChapter !== e.lastChapter ? `${trunc(e.firstChapter,24)} → ${trunc(e.lastChapter,24)}` : trunc(e.firstChapter, 48);
     const badge = isCustom ? 'custom' : (isBulk ? 'bulk' : 'single');
     const label = isCustom ? 'CUSTOM' : (isBulk ? 'BULK' : 'SINGLE');
-    return `<div class="hc" data-id="${e.id}">
-      <div class="hc-top"><div class="hc-title">${esc(range)}</div><div class="hc-ts" title="${fmtTimestamp(e.timestamp)}">${timeAgo(e.timestamp)}</div></div>
-      <div class="hc-meta"><span class="hc-badge ${badge}">${label}</span><span class="hc-badge auto">AUTO-SAVED</span><span class="hc-badge range">📑 ${e.chaptersCount} ch</span><span class="hc-badge words">✏ ${(e.words||0).toLocaleString()} w</span></div>
-      <div class="hc-actions">
-        <button class="hc-btn load"    data-id="${e.id}">📂 Load</button>
-        <button class="hc-btn recopy"  data-id="${e.id}">📋 Copy</button>
-        <button class="hc-btn printhc" data-id="${e.id}">🖨 Print</button>
-        <button class="hc-btn del"     data-id="${e.id}">🗑 Del</button>
-      </div>
-    </div>`;
+    return `<div class="hc" data-id="${e.id}"><div class="hc-top"><div class="hc-title">${esc(range)}</div><div class="hc-ts" title="${fmtTimestamp(e.timestamp)}">${timeAgo(e.timestamp)}</div></div><div class="hc-meta"><span class="hc-badge ${badge}">${label}</span><span class="hc-badge auto">AUTO-SAVED</span><span class="hc-badge range">📑 ${e.chaptersCount} ch</span><span class="hc-badge words">✏ ${(e.words||0).toLocaleString()} w</span></div><div class="hc-actions"><button class="hc-btn load" data-id="${e.id}">📂 Load</button><button class="hc-btn recopy" data-id="${e.id}">📋 Copy</button><button class="hc-btn printhc" data-id="${e.id}">🖨 Print</button><button class="hc-btn del" data-id="${e.id}">🗑 Del</button></div></div>`;
   }).join('');
 }
-
 extractsList.addEventListener('click', async e => {
-  const btn=e.target.closest('.hc-btn'); if(!btn) return;
-  const id=btn.dataset.id; const hist=storageGet(HISTORY_KEY,[]); const entry=hist.find(h=>h.id===id); if(!entry) return;
-  if (btn.classList.contains('load')) {
-    const text=loadHistText(id); singleText=text; singleTitle=entry.firstChapter; singleUrl=entry.novelUrl||'';
-    output.value=text; chapterTitle.textContent=entry.firstChapter;
-    const s=calcStats(text); wordCount.textContent=s.words.toLocaleString()+' words'; charCount.textContent=s.chars.toLocaleString()+' chars';
-    copyBtn.disabled=printBtn.disabled=clearBtn.disabled=false;
-    switchTab(tabSingle,panelSingle); showStatus(statusSingle,`✓ Loaded: ${trunc(entry.firstChapter,40)}`,'info');
-  }
-  if (btn.classList.contains('recopy')) { const text=loadHistText(id); try{await navigator.clipboard.writeText(text);showStatus(statusHistory,'✓ Copied!','success');}catch{showStatus(statusHistory,'✗ Clipboard failed.','error');} }
-  if (btn.classList.contains('printhc')) { const text=loadHistText(id); setPrintData(text,entry.firstChapter,null); switchTab(tabPrint,panelPrint); syncPrintPanel(); }
-  if (btn.classList.contains('del')) { const updated=hist.filter(h=>h.id!==id); try{localStorage.removeItem('nb_text_'+id);}catch{} storageSet(HISTORY_KEY,updated); renderExtracts(); showStatus(statusHistory,'✓ Deleted.','info'); }
+  const btn = e.target.closest('.hc-btn'); if (!btn) return;
+  const id = btn.dataset.id; const hist = storageGet(HISTORY_KEY, []); const entry = hist.find(h => h.id === id); if (!entry) return;
+  if (btn.classList.contains('load')) { const text = loadHistText(id); singleText = text; singleTitle = entry.firstChapter; singleUrl = entry.novelUrl || ''; output.value = text; chapterTitle.textContent = entry.firstChapter; const s = calcStats(text); wordCount.textContent = s.words.toLocaleString() + ' words'; charCount.textContent = s.chars.toLocaleString() + ' chars'; copyBtn.disabled = printBtn.disabled = clearBtn.disabled = false; switchTab(tabSingle, panelSingle); showStatus(statusSingle, `✓ Loaded: ${trunc(entry.firstChapter,40)}`, 'info'); }
+  if (btn.classList.contains('recopy')) { const text = loadHistText(id); try { await navigator.clipboard.writeText(text); showStatus(statusHistory, '✓ Copied!', 'success'); } catch { showStatus(statusHistory, '✗ Clipboard failed.', 'error'); } }
+  if (btn.classList.contains('printhc')) { const text = loadHistText(id); setPrintData(text, entry.firstChapter, null); switchTab(tabPrint, panelPrint); syncPrintPanel(); }
+  if (btn.classList.contains('del')) { const updated = hist.filter(h => h.id !== id); try { localStorage.removeItem('nb_text_'+id); } catch {} storageSet(HISTORY_KEY, updated); renderExtracts(); showStatus(statusHistory, '✓ Deleted.', 'info'); }
 });
-
 function renderBookmarkLog() {
-  const log=storageGet(BOOKMARK_LOG,[]); histCountBadge.textContent=log.length;
-  if (log.length===0) { bookmarksList.innerHTML=`<div class="hist-empty"><div class="icon">🔖</div><div class="msg">No bookmark updates yet.</div></div>`; return; }
-  bookmarksList.innerHTML=log.map(e=>`<div class="hc bm-card" data-id="${e.id}"><div class="hc-top"><div class="hc-title">${esc(trunc(e.chapterTitle||e.newTitle,46))}</div><div class="hc-ts">${timeAgo(e.timestamp)}</div></div><div class="hc-meta"><span class="hc-badge bm">🔖 BOOKMARK</span><span class="hc-badge auto">AUTO-UPDATED</span></div><div class="bm-detail">Was: ${esc(trunc(e.oldTitle,36))}<br><span style="color:var(--bookmark)">Now: ${esc(trunc(e.newTitle,36))}</span></div><div class="hc-actions"><button class="hc-btn del" data-id="${e.id}">🗑 Delete</button></div></div>`).join('');
+  const log = storageGet(BOOKMARK_LOG, []); histCountBadge.textContent = log.length;
+  if (log.length === 0) { bookmarksList.innerHTML = `<div class="hist-empty"><div class="icon">🔖</div><div class="msg">No bookmark updates yet.</div></div>`; return; }
+  bookmarksList.innerHTML = log.map(e => `<div class="hc bm-card" data-id="${e.id}"><div class="hc-top"><div class="hc-title">${esc(trunc(e.chapterTitle||e.newTitle,46))}</div><div class="hc-ts">${timeAgo(e.timestamp)}</div></div><div class="hc-meta"><span class="hc-badge bm">🔖 BOOKMARK</span><span class="hc-badge auto">AUTO-UPDATED</span></div><div class="bm-detail">Was: ${esc(trunc(e.oldTitle,36))}<br><span style="color:var(--bookmark)">Now: ${esc(trunc(e.newTitle,36))}</span></div><div class="hc-actions"><button class="hc-btn del" data-id="${e.id}">🗑 Delete</button></div></div>`).join('');
 }
-bookmarksList.addEventListener('click', e=>{ const btn=e.target.closest('.hc-btn.del'); if(!btn) return; let log=storageGet(BOOKMARK_LOG,[]); log=log.filter(x=>x.id!==btn.dataset.id); storageSet(BOOKMARK_LOG,log); renderBookmarkLog(); showStatus(statusHistory,'✓ Deleted.','info'); });
-histClearAll.addEventListener('click', ()=>{
-  if (activeHistSub==='extracts') { if(!confirm('Clear all extract history?')) return; const hist=storageGet(HISTORY_KEY,[]); hist.forEach(e=>{try{localStorage.removeItem('nb_text_'+e.id);}catch{}}); storageSet(HISTORY_KEY,[]); renderExtracts(); }
-  else { if(!confirm('Clear all bookmark logs?')) return; storageSet(BOOKMARK_LOG,[]); renderBookmarkLog(); }
-  showStatus(statusHistory,'✓ Cleared.','warn');
+bookmarksList.addEventListener('click', e => { const btn = e.target.closest('.hc-btn.del'); if (!btn) return; let log = storageGet(BOOKMARK_LOG, []); log = log.filter(x => x.id !== btn.dataset.id); storageSet(BOOKMARK_LOG, log); renderBookmarkLog(); showStatus(statusHistory, '✓ Deleted.', 'info'); });
+histClearAll.addEventListener('click', () => {
+  if (activeHistSub === 'extracts') { if (!confirm('Clear all extract history?')) return; const hist = storageGet(HISTORY_KEY, []); hist.forEach(e => { try { localStorage.removeItem('nb_text_'+e.id); } catch {} }); storageSet(HISTORY_KEY, []); renderExtracts(); }
+  else { if (!confirm('Clear all bookmark logs?')) return; storageSet(BOOKMARK_LOG, []); renderBookmarkLog(); }
+  showStatus(statusHistory, '✓ Cleared.', 'warn');
 });
-function renderHistory() { if(activeHistSub==='extracts'){extractsList.style.display='';bookmarksList.style.display='none';renderExtracts();}else{bookmarksList.style.display='';extractsList.style.display='none';renderBookmarkLog();} }
+function renderHistory() { if (activeHistSub === 'extracts') { extractsList.style.display = ''; bookmarksList.style.display = 'none'; renderExtracts(); } else { bookmarksList.style.display = ''; extractsList.style.display = 'none'; renderBookmarkLog(); } }
 
-/* PRINT */
-function setPrintData(text, title, chunks) { printData={ text, title, chunks }; }
+/* ── PRINT ── */
+function setPrintData(text, title, chunks) { printData = { text, title, chunks }; }
 function loadPrintConfig() {
-  const cfg=storageGet(PRINT_CFG_KEY,{});
-  if(cfg.fontSize)   fontSizeSlider.value=cfg.fontSize;
-  if(cfg.lineHeight) lineHeightSlider.value=cfg.lineHeight;
-  if(cfg.fontFamily) fontFamilySelect.value=cfg.fontFamily;
-  if(cfg.pageBreak)  pageBreakSelect.value=cfg.pageBreak;
-  if(cfg.twoCol!==undefined)   twoColToggle.checked=cfg.twoCol;
-  if(cfg.titles!==undefined)   titlesToggle.checked=cfg.titles;
-  if(cfg.dividers!==undefined) dividersToggle.checked=cfg.dividers;
+  const cfg = storageGet(PRINT_CFG_KEY, {});
+  if (cfg.fontSize)   fontSizeSlider.value   = cfg.fontSize;
+  if (cfg.lineHeight) lineHeightSlider.value  = cfg.lineHeight;
+  if (cfg.fontFamily) fontFamilySelect.value  = cfg.fontFamily;
+  if (cfg.pageBreak)  pageBreakSelect.value   = cfg.pageBreak;
+  if (cfg.twoCol !== undefined)   twoColToggle.checked   = cfg.twoCol;
+  if (cfg.titles !== undefined)   titlesToggle.checked   = cfg.titles;
+  if (cfg.dividers !== undefined) dividersToggle.checked = cfg.dividers;
   updateSliderDisplays();
 }
-function savePrintConfig() { storageSet(PRINT_CFG_KEY,{fontSize:fontSizeSlider.value,lineHeight:lineHeightSlider.value,fontFamily:fontFamilySelect.value,pageBreak:pageBreakSelect.value,twoCol:twoColToggle.checked,titles:titlesToggle.checked,dividers:dividersToggle.checked}); }
-function updateSliderDisplays() { fontSizeVal.textContent=parseFloat(fontSizeSlider.value).toFixed(1)+'pt'; lineHeightVal.textContent=parseFloat(lineHeightSlider.value).toFixed(1); }
-[fontSizeSlider,lineHeightSlider].forEach(s=>s.addEventListener('input',()=>{updateSliderDisplays();buildPreview();savePrintConfig();}));
-[fontFamilySelect,pageBreakSelect].forEach(s=>s.addEventListener('change',()=>{buildPreview();savePrintConfig();}));
-[twoColToggle,titlesToggle,dividersToggle].forEach(t=>t.addEventListener('change',()=>{buildPreview();savePrintConfig();}));
+function savePrintConfig() { storageSet(PRINT_CFG_KEY, { fontSize: fontSizeSlider.value, lineHeight: lineHeightSlider.value, fontFamily: fontFamilySelect.value, pageBreak: pageBreakSelect.value, twoCol: twoColToggle.checked, titles: titlesToggle.checked, dividers: dividersToggle.checked }); }
+function updateSliderDisplays() { fontSizeVal.textContent = parseFloat(fontSizeSlider.value).toFixed(1)+'pt'; lineHeightVal.textContent = parseFloat(lineHeightSlider.value).toFixed(1); }
+[fontSizeSlider,lineHeightSlider].forEach(s => s.addEventListener('input', () => { updateSliderDisplays(); buildPreview(); savePrintConfig(); }));
+[fontFamilySelect,pageBreakSelect].forEach(s => s.addEventListener('change', () => { buildPreview(); savePrintConfig(); }));
+[twoColToggle,titlesToggle,dividersToggle].forEach(t => t.addEventListener('change', () => { buildPreview(); savePrintConfig(); }));
 function syncPrintPanel() {
-  if (!printData) { printSourceInfo.innerHTML='<strong>Print source:</strong> No text loaded — extract a chapter first.'; printPreview.textContent='No text to preview yet.'; doPrintBtn.disabled=true; return; }
-  const s=calcStats(printData.text);
-  printSourceInfo.innerHTML=`<strong>Print source:</strong> ${esc(trunc(printData.title,60))} — ${s.words.toLocaleString()} words, ${s.chars.toLocaleString()} chars`;
-  doPrintBtn.disabled=false; buildPreview();
+  if (!printData) { printSourceInfo.innerHTML = '<strong>Print source:</strong> No text loaded — extract a chapter first.'; printPreview.textContent = 'No text to preview yet.'; doPrintBtn.disabled = true; return; }
+  const s = calcStats(printData.text);
+  printSourceInfo.innerHTML = `<strong>Print source:</strong> ${esc(trunc(printData.title,60))} — ${s.words.toLocaleString()} words, ${s.chars.toLocaleString()} chars`;
+  doPrintBtn.disabled = false; buildPreview();
 }
 function buildPreview() {
   if (!printData) return;
-  const fontSize=parseFloat(fontSizeSlider.value), lineHeight=parseFloat(lineHeightSlider.value), fontFamily=fontFamilySelect.value, twoCol=twoColToggle.checked, titles=titlesToggle.checked, dividers=dividersToggle.checked;
-  printPreview.style.fontSize=fontSize+'pt'; printPreview.style.lineHeight=lineHeight; printPreview.style.fontFamily=fontFamily; printPreview.classList.toggle('two-col',twoCol);
-  if (printData.chunks&&printData.chunks.length>0) {
-    let html='';
-    printData.chunks.forEach((ch,i)=>{
-      if(titles) html+=`<div style="font-weight:bold;font-size:${(fontSize+1.5).toFixed(1)}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;">${esc(ch.title)}</div>`;
-      html+=ch.content.split('\n\n').map(p=>`<div style="margin-bottom:5pt;text-align:justify;">${esc(p)}</div>`).join('');
-      if(dividers&&i<printData.chunks.length-1) html+=`<hr style="border:none;border-top:1px dashed #ccc;margin:10pt 0;"/>`;
+  const fontSize = parseFloat(fontSizeSlider.value), lineHeight = parseFloat(lineHeightSlider.value), fontFamily = fontFamilySelect.value, twoCol = twoColToggle.checked, titles = titlesToggle.checked, dividers = dividersToggle.checked;
+  printPreview.style.fontSize = fontSize+'pt'; printPreview.style.lineHeight = lineHeight; printPreview.style.fontFamily = fontFamily; printPreview.classList.toggle('two-col', twoCol);
+  if (printData.chunks && printData.chunks.length > 0) {
+    let html = '';
+    printData.chunks.forEach((ch, i) => {
+      if (titles) html += `<div style="font-weight:bold;font-size:${(fontSize+1.5).toFixed(1)}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;">${esc(ch.title)}</div>`;
+      html += ch.content.split('\n\n').map(p => `<div style="margin-bottom:5pt;text-align:justify;">${esc(p)}</div>`).join('');
+      if (dividers && i < printData.chunks.length-1) html += `<hr style="border:none;border-top:1px dashed #ccc;margin:10pt 0;"/>`;
     });
-    printPreview.innerHTML=html;
+    printPreview.innerHTML = html;
   } else {
-    const lines=printData.text.split('\n\n'); let html='';
-    lines.forEach(line=>{ const isSep=line.includes('─────'); if(isSep&&dividers){html+=`<hr style="border:none;border-top:1px dashed #ccc;margin:8pt 0;"/>`;return;} if(isSep&&!dividers) return; html+=`<div style="margin-bottom:5pt;text-align:justify;">${esc(line)}</div>`; });
-    printPreview.innerHTML=html||esc(printData.text);
+    const lines = printData.text.split('\n\n'); let html = '';
+    lines.forEach(line => { const isSep = line.includes('─────'); if (isSep&&dividers) { html += `<hr style="border:none;border-top:1px dashed #ccc;margin:8pt 0;"/>`; return; } if (isSep&&!dividers) return; html += `<div style="margin-bottom:5pt;text-align:justify;">${esc(line)}</div>`; });
+    printPreview.innerHTML = html || esc(printData.text);
   }
-  buildPrintRoot(fontSize,lineHeight,fontFamily,twoCol,titles,dividers,pageBreakSelect.value);
+  buildPrintRoot(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreakSelect.value);
 }
-function buildPrintRoot(fontSize,lineHeight,fontFamily,twoCol,titles,dividers,pageBreak) {
-  printRoot.innerHTML=''; printRoot.className=twoCol?'two-col':'';
-  printRoot.style.setProperty('--pf',fontFamily); printRoot.style.setProperty('--ps',fontSize+'pt'); printRoot.style.setProperty('--pl',lineHeight); printRoot.style.setProperty('--pb',pageBreak);
-  if (printData.chunks&&printData.chunks.length>0) {
-    printData.chunks.forEach((ch,i)=>{
-      const sec=document.createElement('div'); sec.className='print-chapter';
-      if(titles){const t=document.createElement('div');t.className='print-chapter-title';t.textContent=ch.title;sec.appendChild(t);}
-      ch.content.split('\n\n').forEach(para=>{const p=document.createElement('p');p.className='print-para';p.textContent=para;sec.appendChild(p);});
+function buildPrintRoot(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreak) {
+  printRoot.innerHTML = ''; printRoot.className = twoCol ? 'two-col' : '';
+  printRoot.style.setProperty('--pf', fontFamily); printRoot.style.setProperty('--ps', fontSize+'pt'); printRoot.style.setProperty('--pl', lineHeight); printRoot.style.setProperty('--pb', pageBreak);
+  if (printData.chunks && printData.chunks.length > 0) {
+    printData.chunks.forEach((ch, i) => {
+      const sec = document.createElement('div'); sec.className = 'print-chapter';
+      if (titles) { const t = document.createElement('div'); t.className = 'print-chapter-title'; t.textContent = ch.title; sec.appendChild(t); }
+      ch.content.split('\n\n').forEach(para => { const p = document.createElement('p'); p.className = 'print-para'; p.textContent = para; sec.appendChild(p); });
       printRoot.appendChild(sec);
-      if(dividers&&i<printData.chunks.length-1){const hr=document.createElement('hr');hr.className='print-divider';printRoot.appendChild(hr);}
+      if (dividers && i < printData.chunks.length-1) { const hr = document.createElement('hr'); hr.className = 'print-divider'; printRoot.appendChild(hr); }
     });
   } else {
-    const sec=document.createElement('div'); sec.className='print-chapter';
-    if(titles&&printData.title){const t=document.createElement('div');t.className='print-chapter-title';t.textContent=printData.title;sec.appendChild(t);}
-    printData.text.split('\n\n').forEach(line=>{if(line.includes('─────')){if(dividers){const hr=document.createElement('hr');hr.className='print-divider';sec.appendChild(hr);}return;}const p=document.createElement('p');p.className='print-para';p.textContent=line;sec.appendChild(p);});
+    const sec = document.createElement('div'); sec.className = 'print-chapter';
+    if (titles && printData.title) { const t = document.createElement('div'); t.className = 'print-chapter-title'; t.textContent = printData.title; sec.appendChild(t); }
+    printData.text.split('\n\n').forEach(line => { if (line.includes('─────')) { if (dividers) { const hr = document.createElement('hr'); hr.className = 'print-divider'; sec.appendChild(hr); } return; } const p = document.createElement('p'); p.className = 'print-para'; p.textContent = line; sec.appendChild(p); });
     printRoot.appendChild(sec);
   }
 }
-doPrintBtn.addEventListener('click', ()=>{ if(!printData) return; showStatus(statusPrint,'🖨 Opening print dialog…','info'); setTimeout(()=>{window.print();showStatus(statusPrint,'✓ Print dialog opened. Use your browser\'s print settings for margins & paper.','success',true);},150); });
+doPrintBtn.addEventListener('click', () => { if (!printData) return; showStatus(statusPrint, '🖨 Opening print dialog…', 'info'); setTimeout(() => { window.print(); showStatus(statusPrint, "✓ Print dialog opened. Use your browser's print settings for margins & paper.", 'success', true); }, 150); });
 
-/* INIT */
+/* ── INIT ── */
 loadPrintConfig(); renderExtracts();
-try { if(window.location.href.includes('novelbin.com')) urlInput.value=window.location.href; } catch {}
+try { if (window.location.href.includes('novelbin.com')) urlInput.value = window.location.href; } catch {}
 </script>
 </body>
 </html>
