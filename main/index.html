@@ -357,6 +357,14 @@
     .toggle input:checked ~ .toggle-track ~ .toggle-thumb { transform: translateX(16px); background: var(--accent2); }
     .print-source-info { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--accent2); border-radius: 6px; padding: 8px 12px; font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: .5px; }
     .print-source-info strong { color: var(--text); }
+    .print-edit-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .print-edit-label  { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+    .print-edit-hint   { font-family: var(--mono); font-size: 9px; color: var(--accent2); letter-spacing: .5px; }
+    .print-reset-btn   { padding: 2px 9px; border-radius: 4px; border: 1px solid var(--accent3); background: rgba(255,60,172,.07); color: var(--accent3); font-family: var(--ff); font-size: 10px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; cursor: pointer; transition: all .2s; }
+    .print-reset-btn:hover { background: rgba(255,60,172,.18); }
+    textarea#printEditArea { width: 100%; height: 180px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 11px; line-height: 1.7; padding: 10px 12px; resize: vertical; outline: none; transition: border-color .2s; }
+    textarea#printEditArea:focus { border-color: rgba(0,229,255,.35); }
+    textarea#printEditArea::placeholder { color: var(--muted); font-style: italic; }
 
     /* FOOTER */
     #appFooter { position: relative; z-index: 10; flex-shrink: 0; padding: 6px 20px 8px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); }
@@ -593,6 +601,16 @@
       <strong>Print source:</strong> No text loaded — extract a chapter first, then configure here.
     </div>
     <div>
+      <div class="print-edit-header">
+        <span class="print-edit-label">✏ Editable Text</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="print-edit-hint" id="printEditHint"></span>
+          <button class="print-reset-btn" id="printResetBtn" style="display:none;">↺ Reset</button>
+        </div>
+      </div>
+      <textarea id="printEditArea" placeholder="Extract a chapter first — text will appear here and can be freely edited before printing."></textarea>
+    </div>
+    <div>
       <div class="section-label">Live Preview (approx.)</div>
       <div class="print-preview-wrap"><div id="printPreview">No text to preview yet.</div></div>
     </div>
@@ -710,6 +728,9 @@ const subTabExtracts    = document.getElementById('subTabExtracts');
 const subTabBookmarks   = document.getElementById('subTabBookmarks');
 const printSourceInfo   = document.getElementById('printSourceInfo');
 const printPreview      = document.getElementById('printPreview');
+const printEditArea     = document.getElementById('printEditArea');
+const printResetBtn     = document.getElementById('printResetBtn');
+const printEditHint     = document.getElementById('printEditHint');
 const fontSizeSlider    = document.getElementById('fontSizeSlider');
 const fontSizeVal       = document.getElementById('fontSizeVal');
 const lineHeightSlider  = document.getElementById('lineHeightSlider');
@@ -1463,7 +1484,9 @@ histClearAll.addEventListener('click', () => {
 function renderHistory() { if (activeHistSub === 'extracts') { extractsList.style.display = ''; bookmarksList.style.display = 'none'; renderExtracts(); } else { bookmarksList.style.display = ''; extractsList.style.display = 'none'; renderBookmarkLog(); } }
 
 /* ── PRINT ── */
-function setPrintData(text, title, chunks) { printData = { text, title, chunks }; }
+function setPrintData(text, title, chunks) {
+  printData = { text, title, chunks, _origText: text, _origChunks: chunks || null };
+}
 function loadPrintConfig() {
   const cfg = storageGet(PRINT_CFG_KEY, {});
   if (cfg.fontSize)   fontSizeSlider.value   = cfg.fontSize;
@@ -1481,11 +1504,57 @@ function updateSliderDisplays() { fontSizeVal.textContent = parseFloat(fontSizeS
 [fontFamilySelect,pageBreakSelect].forEach(s => s.addEventListener('change', () => { buildPreview(); savePrintConfig(); }));
 [twoColToggle,titlesToggle,dividersToggle].forEach(t => t.addEventListener('change', () => { buildPreview(); savePrintConfig(); }));
 function syncPrintPanel() {
-  if (!printData) { printSourceInfo.innerHTML = '<strong>Print source:</strong> No text loaded — extract a chapter first.'; printPreview.textContent = 'No text to preview yet.'; doPrintBtn.disabled = true; return; }
+  if (!printData) {
+    printSourceInfo.innerHTML = '<strong>Print source:</strong> No text loaded — extract a chapter first.';
+    printPreview.textContent = 'No text to preview yet.';
+    printEditArea.value = '';
+    printEditHint.textContent = '';
+    printResetBtn.style.display = 'none';
+    doPrintBtn.disabled = true;
+    return;
+  }
   const s = calcStats(printData.text);
   printSourceInfo.innerHTML = `<strong>Print source:</strong> ${esc(trunc(printData.title,60))} — ${s.words.toLocaleString()} words, ${s.chars.toLocaleString()} chars`;
-  doPrintBtn.disabled = false; buildPreview();
+  // Populate textarea with full flat text (original)
+  if (!printData._origText) printData._origText = printData.text;
+  printEditArea.value = printData.text;
+  updatePrintEditHint();
+  doPrintBtn.disabled = false;
+  buildPreview();
 }
+function updatePrintEditHint() {
+  if (!printData) return;
+  const changed = printData.text !== printData._origText;
+  printEditHint.textContent = changed ? '● edited' : '';
+  printResetBtn.style.display = changed ? '' : 'none';
+}
+printEditArea.addEventListener('input', () => {
+  if (!printData) return;
+  // Flatten chunks into edited text; editing clears chunk structure for simplicity
+  printData.text = printEditArea.value;
+  printData.chunks = null; // switch to flat mode so buildPreview uses edited text
+  updatePrintEditHint();
+  buildPreview();
+});
+printResetBtn.addEventListener('click', () => {
+  if (!printData || !printData._origText) return;
+  printData.text = printData._origText;
+  printData.chunks = printData._origChunks || null;
+  printEditArea.value = printData._origText;
+  updatePrintEditHint();
+  buildPreview();
+});
+// Split text into paragraphs robustly — handles \n\n, single \n, and mixed
+function splitParas(text) {
+  if (!text) return [];
+  // If the text has double newlines, use those as paragraph breaks
+  if (text.includes('\n\n')) {
+    return text.split('\n\n').map(s => s.replace(/\n/g, ' ').trim()).filter(Boolean);
+  }
+  // Otherwise split on single newlines, treating each non-empty line as a paragraph
+  return text.split('\n').map(s => s.trim()).filter(Boolean);
+}
+
 function buildPreview() {
   if (!printData) return;
   const fontSize = parseFloat(fontSizeSlider.value), lineHeight = parseFloat(lineHeightSlider.value), fontFamily = fontFamilySelect.value, twoCol = twoColToggle.checked, titles = titlesToggle.checked, dividers = dividersToggle.checked;
@@ -1494,14 +1563,22 @@ function buildPreview() {
     let html = '';
     printData.chunks.forEach((ch, i) => {
       if (titles) html += `<div style="font-weight:bold;font-size:${(fontSize+1.5).toFixed(1)}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;">${esc(ch.title)}</div>`;
-      html += ch.content.split('\n\n').map(p => `<div style="margin-bottom:5pt;text-align:justify;">${esc(p)}</div>`).join('');
+      html += splitParas(ch.content).map(p => {
+        if (p.includes('─────')) return dividers ? `<hr style="border:none;border-top:1px dashed #ccc;margin:8pt 0;"/>` : '';
+        return `<div style="margin-bottom:5pt;text-align:justify;">${esc(p)}</div>`;
+      }).join('');
       if (dividers && i < printData.chunks.length-1) html += `<hr style="border:none;border-top:1px dashed #ccc;margin:10pt 0;"/>`;
     });
     printPreview.innerHTML = html;
   } else {
-    const lines = printData.text.split('\n\n'); let html = '';
-    lines.forEach(line => { const isSep = line.includes('─────'); if (isSep&&dividers) { html += `<hr style="border:none;border-top:1px dashed #ccc;margin:8pt 0;"/>`; return; } if (isSep&&!dividers) return; html += `<div style="margin-bottom:5pt;text-align:justify;">${esc(line)}</div>`; });
-    printPreview.innerHTML = html || esc(printData.text);
+    let html = '';
+    splitParas(printData.text).forEach(line => {
+      const isSep = line.includes('─────');
+      if (isSep && dividers) { html += `<hr style="border:none;border-top:1px dashed #ccc;margin:8pt 0;"/>`; return; }
+      if (isSep) return;
+      html += `<div style="margin-bottom:5pt;text-align:justify;">${esc(line)}</div>`;
+    });
+    printPreview.innerHTML = html || `<div>${esc(printData.text)}</div>`;
   }
   buildPrintRoot(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreakSelect.value);
 }
@@ -1512,14 +1589,20 @@ function buildPrintRoot(fontSize, lineHeight, fontFamily, twoCol, titles, divide
     printData.chunks.forEach((ch, i) => {
       const sec = document.createElement('div'); sec.className = 'print-chapter';
       if (titles) { const t = document.createElement('div'); t.className = 'print-chapter-title'; t.textContent = ch.title; sec.appendChild(t); }
-      ch.content.split('\n\n').forEach(para => { const p = document.createElement('p'); p.className = 'print-para'; p.textContent = para; sec.appendChild(p); });
+      splitParas(ch.content).forEach(para => {
+        if (para.includes('─────')) { if (dividers) { const hr = document.createElement('hr'); hr.className = 'print-divider'; sec.appendChild(hr); } return; }
+        const p = document.createElement('p'); p.className = 'print-para'; p.textContent = para; sec.appendChild(p);
+      });
       printRoot.appendChild(sec);
       if (dividers && i < printData.chunks.length-1) { const hr = document.createElement('hr'); hr.className = 'print-divider'; printRoot.appendChild(hr); }
     });
   } else {
     const sec = document.createElement('div'); sec.className = 'print-chapter';
     if (titles && printData.title) { const t = document.createElement('div'); t.className = 'print-chapter-title'; t.textContent = printData.title; sec.appendChild(t); }
-    printData.text.split('\n\n').forEach(line => { if (line.includes('─────')) { if (dividers) { const hr = document.createElement('hr'); hr.className = 'print-divider'; sec.appendChild(hr); } return; } const p = document.createElement('p'); p.className = 'print-para'; p.textContent = line; sec.appendChild(p); });
+    splitParas(printData.text).forEach(line => {
+      if (line.includes('─────')) { if (dividers) { const hr = document.createElement('hr'); hr.className = 'print-divider'; sec.appendChild(hr); } return; }
+      const p = document.createElement('p'); p.className = 'print-para'; p.textContent = line; sec.appendChild(p);
+    });
     printRoot.appendChild(sec);
   }
 }
