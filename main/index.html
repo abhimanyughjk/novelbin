@@ -8,18 +8,31 @@
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
   <style id="printStyles">
+    /* Print handled via JS beforeprint/afterprint — no @media print needed for layout */
+    #printOverlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 99999;
+      background: #fff; color: #000;
+      overflow-y: auto;
+      padding: 0;
+    }
+    #printOverlay.printing { display: block; }
     @media print {
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      html, body { display: block !important; overflow: visible !important; height: auto !important; min-height: 0 !important; background: #fff !important; }
-      body > * { display: none !important; }
-      #printContainer { display: block !important; position: static !important; width: 100% !important; height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; padding: 0 !important; margin: 0 !important; }
-      #printPreview { display: block !important; width: 100% !important; height: auto !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; color: #000 !important; background: #fff !important; white-space: normal !important; border: none !important; border-radius: 0 !important; }
-      #printPreview .pc { page-break-after: var(--pb, auto); }
-      #printPreview .pc-title { font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 4pt; margin-bottom: 8pt; }
-      #printPreview .pp { margin-bottom: 5pt; text-align: justify; }
-      #printPreview hr { border: none; border-top: 1px dashed #ccc; margin: 8pt 0; }
-      #printPreview.two-col { column-count: 2; column-gap: 20pt; }
-      #printPreview.two-col .pc-title { column-span: all; }
+      body > *:not(#printOverlay) { display: none !important; visibility: hidden !important; }
+      #printOverlay {
+        display: block !important; visibility: visible !important;
+        position: static !important; overflow: visible !important;
+        width: 100% !important; height: auto !important;
+        background: #fff !important; color: #000 !important;
+        padding: 0 !important; margin: 0 !important;
+      }
+      #printOverlay .pc { page-break-after: var(--pb, auto); }
+      #printOverlay .pc-title { font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 4pt; margin-bottom: 8pt; }
+      #printOverlay .pp { margin-bottom: 5pt; text-align: justify; }
+      #printOverlay hr { border: none; border-top: 1px dashed #ccc; margin: 8pt 0; }
+      #printOverlay.two-col { column-count: 2; column-gap: 20pt; }
+      #printOverlay.two-col .pc-title { column-span: all; }
     }
   </style>
 
@@ -366,9 +379,7 @@
 <body>
 
 <iframe id="scrapeFrame" style="position:fixed;top:-9999px;left:-9999px;width:1200px;height:900px;border:none;visibility:hidden;pointer-events:none;z-index:-1;" sandbox="allow-same-origin allow-scripts" referrerpolicy="no-referrer"></iframe>
-<div id="printContainer">
-  <div id="printPreview" style="display:none;"></div>
-</div>
+<div id="printOverlay"></div>
 
 <div id="appHeader">
   <div class="logo-mark">N</div>
@@ -593,7 +604,7 @@
     </div>
     <div>
       <div class="section-label">Live Preview (approx.)</div>
-      <div class="print-preview-wrap"><div id="previewDisplay">No text to preview yet.</div></div>
+      <div class="print-preview-wrap"><div id="printPreview">No text to preview yet.</div></div>
     </div>
     <div class="print-controls">
       <div class="print-control-group">
@@ -709,7 +720,6 @@ const subTabExtracts    = document.getElementById('subTabExtracts');
 const subTabBookmarks   = document.getElementById('subTabBookmarks');
 const printSourceInfo   = document.getElementById('printSourceInfo');
 const printPreview      = document.getElementById('printPreview');
-const previewDisplay    = document.getElementById('previewDisplay');
 const fontSizeSlider    = document.getElementById('fontSizeSlider');
 const fontSizeVal       = document.getElementById('fontSizeVal');
 const lineHeightSlider  = document.getElementById('lineHeightSlider');
@@ -722,6 +732,7 @@ const dividersToggle    = document.getElementById('dividersToggle');
 const doPrintBtn        = document.getElementById('doPrintBtn');
 const statusPrint       = document.getElementById('statusPrint');
 const footerText        = document.getElementById('footerText');
+const printOverlay      = document.getElementById('printOverlay');
 const modeContinuous    = document.getElementById('modeContinuous');
 const modeCustomUrls    = document.getElementById('modeCustomUrls');
 const urlListPanel      = document.getElementById('urlListPanel');
@@ -1480,7 +1491,7 @@ function updateSliderDisplays() { fontSizeVal.textContent = parseFloat(fontSizeS
 [fontFamilySelect,pageBreakSelect].forEach(s => s.addEventListener('change', () => { buildPreview(); savePrintConfig(); }));
 [twoColToggle,titlesToggle,dividersToggle].forEach(t => t.addEventListener('change', () => { buildPreview(); savePrintConfig(); }));
 function syncPrintPanel() {
-  if (!printData) { printSourceInfo.innerHTML = '<strong>Print source:</strong> No text loaded — extract a chapter first.'; previewDisplay.textContent = 'No text to preview yet.'; printPreview.innerHTML = ''; printPreview.style.display = 'none'; doPrintBtn.disabled = true; return; }
+  if (!printData) { printSourceInfo.innerHTML = '<strong>Print source:</strong> No text loaded — extract a chapter first.'; printPreview.textContent = 'No text to preview yet.'; doPrintBtn.disabled = true; return; }
   const s = calcStats(printData.text);
   printSourceInfo.innerHTML = `<strong>Print source:</strong> ${esc(trunc(printData.title,60))} — ${s.words.toLocaleString()} words, ${s.chars.toLocaleString()} chars`;
   doPrintBtn.disabled = false; buildPreview();
@@ -1498,48 +1509,67 @@ function splitParas(text) {
 
 function buildPreview() {
   if (!printData) return;
-  const fontSize = parseFloat(fontSizeSlider.value), lineHeight = parseFloat(lineHeightSlider.value),
-        fontFamily = fontFamilySelect.value, twoCol = twoColToggle.checked,
-        titles = titlesToggle.checked, dividers = dividersToggle.checked,
-        pageBreak = pageBreakSelect.value;
-
-  // Shared style for both display and print target
-  function applyStyle(el) {
-    el.style.fontSize = fontSize+'pt'; el.style.lineHeight = lineHeight; el.style.fontFamily = fontFamily;
-    el.style.setProperty('--pb', pageBreak);
-    el.classList.toggle('two-col', twoCol);
-  }
-  applyStyle(previewDisplay);
-  applyStyle(printPreview);
-  printPreview.style.display = 'block';
-
-  let html = '';
+  const fontSize = parseFloat(fontSizeSlider.value), lineHeight = parseFloat(lineHeightSlider.value), fontFamily = fontFamilySelect.value, twoCol = twoColToggle.checked, titles = titlesToggle.checked, dividers = dividersToggle.checked;
+  printPreview.style.fontSize = fontSize+'pt'; printPreview.style.lineHeight = lineHeight; printPreview.style.fontFamily = fontFamily; printPreview.classList.toggle('two-col', twoCol);
   if (printData.chunks && printData.chunks.length > 0) {
+    let html = '';
     printData.chunks.forEach((ch, i) => {
-      html += `<div class="pc" style="${pageBreak==='always'?'page-break-after:always;':''}">`;
-      if (titles) html += `<div class="pc-title" style="font-weight:bold;font-size:${(fontSize+1.5).toFixed(1)}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;">${esc(ch.title)}</div>`;
+      if (titles) html += `<div style="font-weight:bold;font-size:${(fontSize+1.5).toFixed(1)}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;">${esc(ch.title)}</div>`;
       html += splitParas(ch.content).map(p => {
-        if (p.includes('─────')) return dividers ? `<hr/>` : '';
-        return `<div class="pp" style="margin-bottom:5pt;text-align:justify;">${esc(p)}</div>`;
+        if (p.includes('─────')) return dividers ? `<hr style="border:none;border-top:1px dashed #ccc;margin:8pt 0;"/>` : '';
+        return `<div style="margin-bottom:5pt;text-align:justify;">${esc(p)}</div>`;
       }).join('');
-      html += '</div>';
-      if (dividers && i < printData.chunks.length-1) html += `<hr/>`;
+      if (dividers && i < printData.chunks.length-1) html += `<hr style="border:none;border-top:1px dashed #ccc;margin:10pt 0;"/>`;
     });
+    printPreview.innerHTML = html;
   } else {
-    html += `<div class="pc">`;
-    if (titles && printData.title) html += `<div class="pc-title" style="font-weight:bold;font-size:${(fontSize+1.5).toFixed(1)}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;">${esc(printData.title)}</div>`;
+    let html = '';
     splitParas(printData.text).forEach(line => {
       const isSep = line.includes('─────');
-      if (isSep) { if (dividers) html += `<hr/>`; return; }
-      html += `<div class="pp" style="margin-bottom:5pt;text-align:justify;">${esc(line)}</div>`;
+      if (isSep && dividers) { html += `<hr style="border:none;border-top:1px dashed #ccc;margin:8pt 0;"/>`; return; }
+      if (isSep) return;
+      html += `<div style="margin-bottom:5pt;text-align:justify;">${esc(line)}</div>`;
     });
-    html += '</div>';
+    printPreview.innerHTML = html || `<div>${esc(printData.text)}</div>`;
   }
-
-  previewDisplay.innerHTML = html || `<div>${esc(printData.text)}</div>`;
-  printPreview.innerHTML   = html || `<div>${esc(printData.text)}</div>`;
+  buildPrintRoot(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreakSelect.value);
 }
-doPrintBtn.addEventListener('click', () => { if (!printData) return; showStatus(statusPrint, '🖨 Opening print dialog…', 'info'); setTimeout(() => { window.print(); showStatus(statusPrint, "✓ Print dialog opened. Use your browser's print settings for margins & paper.", 'success', true); }, 150); });
+function buildPrintRoot(fontSize, lineHeight, fontFamily, twoCol, titles, dividers, pageBreak) {
+  printOverlay.innerHTML = '';
+  printOverlay.className = twoCol ? 'two-col' : '';
+  printOverlay.style.cssText = `font-family:${fontFamily};font-size:${fontSize}pt;line-height:${lineHeight};--pb:${pageBreak};`;
+  if (printData.chunks && printData.chunks.length > 0) {
+    printData.chunks.forEach((ch, i) => {
+      const sec = document.createElement('div'); sec.className = 'pc';
+      if (titles) { const t = document.createElement('div'); t.className = 'pc-title'; t.textContent = ch.title; sec.appendChild(t); }
+      splitParas(ch.content).forEach(para => {
+        if (para.includes('─────')) { if (dividers) { const hr = document.createElement('hr'); sec.appendChild(hr); } return; }
+        const p = document.createElement('p'); p.className = 'pp'; p.textContent = para; sec.appendChild(p);
+      });
+      printOverlay.appendChild(sec);
+      if (dividers && i < printData.chunks.length - 1) { const hr = document.createElement('hr'); printOverlay.appendChild(hr); }
+    });
+  } else {
+    const sec = document.createElement('div'); sec.className = 'pc';
+    if (titles && printData.title) { const t = document.createElement('div'); t.className = 'pc-title'; t.textContent = printData.title; sec.appendChild(t); }
+    splitParas(printData.text).forEach(line => {
+      if (line.includes('─────')) { if (dividers) { const hr = document.createElement('hr'); sec.appendChild(hr); } return; }
+      const p = document.createElement('p'); p.className = 'pp'; p.textContent = line; sec.appendChild(p);
+    });
+    printOverlay.appendChild(sec);
+  }
+}
+doPrintBtn.addEventListener('click', () => {
+  if (!printData) return;
+  showStatus(statusPrint, '🖨 Opening print dialog…', 'info');
+  // Show overlay so browser renders full content before print dialog
+  printOverlay.classList.add('printing');
+  setTimeout(() => {
+    window.print();
+    printOverlay.classList.remove('printing');
+    showStatus(statusPrint, "✓ Print dialog opened. Use your browser's print settings for margins & paper.", 'success', true);
+  }, 200);
+});
 
 /* ── INIT ── */
 loadPrintConfig(); renderExtracts();
