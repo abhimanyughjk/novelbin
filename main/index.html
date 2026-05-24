@@ -812,6 +812,26 @@ function timeAgo(ts) { const m = Math.floor((Date.now()-ts)/60000); if (m<1) ret
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function trunc(s, n) { return s && s.length>n ? s.slice(0,n)+'…' : (s||'—'); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ── RETRY HELPER ──
+   Retries an async fn up to maxAttempts times with exponential backoff.
+   onRetry(attempt, maxAttempts, err) is called before each retry so the UI
+   can show progress.  Returns the resolved value or throws on final failure. */
+async function withRetry(fn, { maxAttempts = 4, baseDelay = 1200, onRetry } = {}) {
+  let lastErr;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === maxAttempts) break;
+      const delay = baseDelay * Math.pow(1.8, attempt - 1); // 1.2s, 2.16s, 3.9s
+      if (onRetry) onRetry(attempt, maxAttempts, err, delay);
+      await sleep(delay);
+    }
+  }
+  throw lastErr;
+}
 function novelBaseUrl(url) { try { const u = new URL(url); const p = u.pathname.split('/').filter(Boolean); return p.length>=2 ? `${u.origin}/${p[0]}/${p[1]}` : null; } catch { return null; } }
 
 /* ── TAB SWITCHING ── */
@@ -1310,7 +1330,12 @@ extractBtn.addEventListener('click', async () => {
   if (!url.includes('novelbin.com')) { showStatus(statusSingle, '⚠ Enter a novelbin.com chapter URL above first.', 'error', true); return; }
   statusSingle.style.display = 'none'; loaderSingle.style.display = 'flex'; extractBtn.disabled = true;
   try {
-    const html = await fetchPageHtml(url);
+    const html = await withRetry(
+      () => fetchPageHtml(url),
+      { maxAttempts: 4, onRetry: (attempt, max, err, delay) => {
+        showStatus(statusSingle, `⚠ Attempt ${attempt}/${max} failed — retrying in ${(delay/1000).toFixed(1)}s… (${err.message})`, 'warn', true);
+      }}
+    );
     const { title, content, error } = extractFromHtml(html, url);
     loaderSingle.style.display = 'none'; extractBtn.disabled = false;
     if (error && !content) { showStatus(statusSingle, '✗ ' + error, 'error', true); return; }
@@ -1321,7 +1346,7 @@ extractBtn.addEventListener('click', async () => {
     autoSaveHistory({ type: 'single', firstChapter: title, lastChapter: title, chaptersCount: 1, text: content, novelUrl: novelBaseUrl(url) });
     showStatus(statusSingle, `✓ Extracted & saved — ${s.words.toLocaleString()} words`, 'success');
     footerText.textContent = `Last extract: ${trunc(title, 50)}`;
-  } catch(err) { loaderSingle.style.display = 'none'; extractBtn.disabled = false; showStatus(statusSingle, '✗ ' + err.message, 'error', true); }
+  } catch(err) { loaderSingle.style.display = 'none'; extractBtn.disabled = false; showStatus(statusSingle, '✗ Failed after 4 attempts: ' + err.message, 'error', true); }
 });
 copyBtn.addEventListener('click', async () => {
   if (!singleText) return;
@@ -1372,9 +1397,21 @@ async function runBulkLoop(startUrl) {
   while (!bulkStopped) {
     try {
       progressCurrent.textContent = `Fetching: ${trunc(currentUrl, 55)}`;
-      const html = await fetchPageHtml(currentUrl);
+      const html = await withRetry(
+        () => fetchPageHtml(currentUrl),
+        { maxAttempts: 4, onRetry: (attempt, max, err, delay) => {
+          progressCurrent.textContent = `Retry ${attempt}/${max}: ${trunc(currentUrl, 42)} — ${(delay/1000).toFixed(1)}s delay`;
+          canvasIndicatorText.textContent = `Retrying chapter (attempt ${attempt}/${max})…`;
+        }}
+      );
       const { title, content, error } = extractFromHtml(html, currentUrl);
-      if (error && !content) { setBulkUI(false); showStatus(statusBulk, '✗ ' + error, 'error', true); break; }
+      if (error && !content) {
+        // Content parse error on a fetched page — skip this chapter and try next
+        showStatus(statusBulk, `⚠ Parse error on "${trunc(currentUrl,35)}", skipping: ${error}`, 'warn', true);
+        const nav = getNextUrlFromHtml(html);
+        if (nav.isLast || !nav.nextUrl) { finishBulk('continuous'); break; }
+        currentUrl = nav.nextUrl; await sleep(800); continue;
+      }
       bulkCount++; bulkLastTitle = title;
       if (!bulkFirstTitle) bulkFirstTitle = title;
       const chunk = `\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
@@ -1384,7 +1421,16 @@ async function runBulkLoop(startUrl) {
       const nav = getNextUrlFromHtml(html);
       if (nav.isLast || !nav.nextUrl) { finishBulk('continuous'); break; }
       currentUrl = nav.nextUrl; await sleep(800);
-    } catch(err) { setBulkUI(false); showStatus(statusBulk, '✗ Fetch error: ' + err.message, 'error', true); break; }
+    } catch(err) {
+      // All 4 attempts exhausted for this chapter — stop the run
+      setBulkUI(false);
+      showStatus(statusBulk, `✗ Failed after 4 attempts on "${trunc(currentUrl,35)}": ${err.message}`, 'error', true);
+      if (bulkCount > 0) {
+        autoSaveHistory({ type: 'bulk', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
+        showStatus(statusBulk, `⏹ Saved ${bulkCount} chapters scraped before failure.`, 'warn', true);
+      }
+      break;
+    }
   }
   if (bulkStopped && bulkText) {
     autoSaveHistory({ type: 'bulk', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
@@ -1397,21 +1443,33 @@ async function runCustomUrlLoop(urls) {
   for (let i = 0; i < total; i++) {
     if (bulkStopped) break;
     const url = urls[i];
+    let html;
     try {
       progressCurrent.textContent = `[${i+1}/${total}] Fetching: ${trunc(url, 50)}`;
       progressBarFill.style.width = Math.round((i / total) * 100) + '%';
-      const html = await fetchPageHtml(url);
-      const { title, content, error } = extractFromHtml(html, url);
-      if (error && !content) { canvasIndicatorText.textContent = `[${i+1}/${total}] Skipped: ${trunc(title||url,30)}`; await sleep(400); continue; }
-      bulkCount++; bulkLastTitle = title;
-      if (!bulkFirstTitle) bulkFirstTitle = title;
-      const chunk = `\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
-      bulkChunks.push({ title, content, raw: chunk }); updateBulkOutput();
-      chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount===1?'':'s');
-      bulkChapterTitle.textContent = `[${i+1}/${total}] ${title}`;
-      canvasIndicatorText.textContent = `${bulkCount}/${total} scraped`;
-      await sleep(800);
-    } catch(err) { canvasIndicatorText.textContent = `[${i+1}/${total}] Error, skipping…`; await sleep(600); }
+      html = await withRetry(
+        () => fetchPageHtml(url),
+        { maxAttempts: 4, onRetry: (attempt, max, err, delay) => {
+          progressCurrent.textContent = `[${i+1}/${total}] Retry ${attempt}/${max}: ${trunc(url, 38)} — wait ${(delay/1000).toFixed(1)}s`;
+          canvasIndicatorText.textContent = `Chapter ${i+1}/${total}: retry ${attempt}/${max}`;
+        }}
+      );
+    } catch(err) {
+      // All retries exhausted — skip this chapter and note it
+      canvasIndicatorText.textContent = `[${i+1}/${total}] Skipped after 4 retries`;
+      showStatus(statusBulk, `⚠ Skipped [${i+1}/${total}] after 4 failed attempts: ${trunc(url,35)}`, 'warn', true);
+      await sleep(600); continue;
+    }
+    const { title, content, error } = extractFromHtml(html, url);
+    if (error && !content) { canvasIndicatorText.textContent = `[${i+1}/${total}] Skipped: ${trunc(title||url,30)}`; await sleep(400); continue; }
+    bulkCount++; bulkLastTitle = title;
+    if (!bulkFirstTitle) bulkFirstTitle = title;
+    const chunk = `\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
+    bulkChunks.push({ title, content, raw: chunk }); updateBulkOutput();
+    chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount===1?'':'s');
+    bulkChapterTitle.textContent = `[${i+1}/${total}] ${title}`;
+    canvasIndicatorText.textContent = `${bulkCount}/${total} scraped`;
+    await sleep(800);
   }
   if (!bulkStopped) { progressBarFill.style.width = '100%'; finishBulk('custom'); }
   else if (bulkText) { setBulkUI(false); autoSaveHistory({ type: 'custom', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) }); showStatus(statusBulk, `⏹ Stopped — ${bulkCount} chapters saved to history.`, 'warn', true); }
