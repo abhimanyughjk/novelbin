@@ -466,7 +466,9 @@ async function openViewer(e, name, rawUrl) {
   const newTabBtn = document.getElementById('modal-newtab');
   document.getElementById('modal-title').textContent = name;
   document.getElementById('modal-dl').href = rawUrl;
-  newTabBtn.href = rawUrl;
+  const filePath = state.path ? state.path + '/' + name : name;
+  const ghPagesUrl = `https://${state.owner}.github.io/${state.repo}/${filePath}`;
+  newTabBtn.href = ghPagesUrl;
   newTabBtn.style.display = 'inline-flex';
   body.innerHTML = '<div class="modal-loading"><span>Loading…</span></div>';
   modal.style.display = 'flex';
