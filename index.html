@@ -169,6 +169,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);min-hei
     <div class="modal-head">
       <div class="modal-title" id="modal-title"></div>
       <div class="modal-actions">
+        <a class="abtn" id="modal-newtab" href="#" target="_blank" rel="noopener" style="display:none">↗ Open</a>
         <a class="abtn dl" id="modal-dl" href="#" target="_blank" rel="noopener" download>↓ Download</a>
         <button class="close-btn" onclick="closeModalDirect()">×</button>
       </div>
@@ -462,8 +463,11 @@ async function openViewer(e, name, rawUrl) {
   if (e) e.stopPropagation();
   const modal = document.getElementById('modal');
   const body = document.getElementById('modal-body');
+  const newTabBtn = document.getElementById('modal-newtab');
   document.getElementById('modal-title').textContent = name;
   document.getElementById('modal-dl').href = rawUrl;
+  newTabBtn.href = rawUrl;
+  newTabBtn.style.display = 'inline-flex';
   body.innerHTML = '<div class="modal-loading"><span>Loading…</span></div>';
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
@@ -472,9 +476,7 @@ async function openViewer(e, name, rawUrl) {
     body.innerHTML = `<iframe src="https://docs.google.com/viewer?url=${encodeURIComponent(rawUrl)}&embedded=true" allowfullscreen></iframe>`;
   } else if (isImage(name)) {
     body.innerHTML = `<img src="${rawUrl}" alt="${name}" onerror="this.alt='Failed to load image'"/>`;
-  } else if (isHtml(name)) {
-    body.innerHTML = `<iframe src="${rawUrl}" sandbox="allow-scripts allow-same-origin"></iframe>`;
-  } else if (isText(name)) {
+  } else if (isHtml(name) || isText(name)) {
     try {
       const res = await fetch(rawUrl);
       if (!res.ok) throw new Error('Failed');
