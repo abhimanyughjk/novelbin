@@ -115,6 +115,12 @@
     .progress-bar-fill.animated { animation: shimmer 1.5s linear infinite; }
     @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     .progress-current { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .progress-stats { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+    .progress-stat  { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 3px; }
+    .progress-stat.elapsed { background: rgba(0,229,255,.07);  border: 1px solid rgba(0,229,255,.18); color: var(--accent); }
+    .progress-stat.eta     { background: rgba(0,245,160,.07);  border: 1px solid rgba(0,245,160,.18); color: var(--success); }
+    .progress-stat.speed   { background: rgba(124,58,237,.07); border: 1px solid rgba(124,58,237,.2);  color: var(--accent2); }
+    .progress-stat.pct     { background: rgba(255,179,0,.07);  border: 1px solid rgba(255,179,0,.2);   color: var(--warn); }
 
     /* CANVAS STATUS */
     .canvas-indicator { display: flex; align-items: center; gap: 10px; background: rgba(255,179,0,.07); border: 1px solid rgba(255,179,0,.25); border-radius: 8px; padding: 9px 13px; }
@@ -376,7 +382,7 @@
     <h1>NovelBin Extractor</h1>
     <p>novelbin.com // chapter ripper — web edition</p>
   </div>
-  <span class="ver-badge">v8.0</span>
+  <span class="ver-badge">v9.6</span>
 </div>
 <div class="scanline"></div>
 
@@ -460,6 +466,12 @@
         <div class="progress-bar-fill animated" id="progressBarFill" style="width:5%"></div>
       </div>
       <div class="progress-current" id="progressCurrent">Initialising…</div>
+      <div class="progress-stats">
+        <span class="progress-stat elapsed" id="statElapsed">⏱ 0s</span>
+        <span class="progress-stat speed"   id="statSpeed">⚡ —</span>
+        <span class="progress-stat eta"     id="statEta" style="display:none">🕐 ETA —</span>
+        <span class="progress-stat pct"     id="statPct" style="display:none">0%</span>
+      </div>
     </div>
     <div class="status" id="statusBulk"></div>
     <div>
@@ -764,6 +776,87 @@ let singleText = '', singleTitle = '', singleUrl = '';
 let bulkText = '', bulkRunning = false, bulkStopped = false;
 let bulkChunks = [], bulkFirstTitle = '', bulkLastTitle = '', bulkCount = 0, bulkStartUrl = '';
 let activeHistSub = 'extracts';
+
+/* ── TIMING ENGINE ── */
+const statElapsed = document.getElementById('statElapsed');
+const statSpeed   = document.getElementById('statSpeed');
+const statEta     = document.getElementById('statEta');
+const statPct     = document.getElementById('statPct');
+
+let _timerInterval = null;
+let _timerStart    = 0;
+let _timerTotal    = 0;   // 0 = unknown (continuous mode)
+let _chapterTimes  = [];  // timestamps of each completed chapter (for rolling avg)
+
+function fmtDur(sec) {
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 60)  return sec + 's';
+  if (sec < 3600) return Math.floor(sec/60) + 'm ' + (sec%60) + 's';
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
+  return h + 'h ' + m + 'm';
+}
+
+function startBulkTimer(totalChapters) {
+  clearInterval(_timerInterval);
+  _timerStart   = Date.now();
+  _timerTotal   = totalChapters || 0;
+  _chapterTimes = [];
+  statEta.style.display = _timerTotal > 0 ? 'inline-block' : 'none';
+  statPct.style.display = _timerTotal > 0 ? 'inline-block' : 'none';
+  statElapsed.textContent = '⏱ 0s';
+  statSpeed.textContent   = '⚡ —';
+  statEta.textContent     = '🕐 ETA —';
+  statPct.textContent     = '0%';
+  _timerInterval = setInterval(_tickTimer, 1000);
+}
+
+function stopBulkTimer() {
+  clearInterval(_timerInterval);
+  _timerInterval = null;
+  // freeze elapsed display
+  const elapsed = (Date.now() - _timerStart) / 1000;
+  statElapsed.textContent = '⏱ ' + fmtDur(elapsed);
+  statEta.textContent     = '🕐 Done';
+}
+
+function recordChapterDone(doneCount) {
+  _chapterTimes.push(Date.now());
+  if (_chapterTimes.length > 10) _chapterTimes.shift(); // rolling window of last 10
+  _tickTimer(doneCount);
+}
+
+function _tickTimer(doneCountHint) {
+  const elapsed = (Date.now() - _timerStart) / 1000;
+  statElapsed.textContent = '⏱ ' + fmtDur(elapsed);
+
+  // Speed: rolling avg over last 10 chapters
+  let speedTxt = '⚡ —';
+  if (_chapterTimes.length >= 2) {
+    const window = (_chapterTimes[_chapterTimes.length-1] - _chapterTimes[0]) / 1000;
+    const rate   = window / (_chapterTimes.length - 1); // sec per chapter
+    speedTxt = '⚡ ' + rate.toFixed(1) + 's/ch';
+  } else if (_chapterTimes.length === 1 && elapsed > 0) {
+    const done = doneCountHint || bulkCount;
+    if (done > 0) speedTxt = '⚡ ' + (elapsed / done).toFixed(1) + 's/ch';
+  }
+  statSpeed.textContent = speedTxt;
+
+  // ETA + % — only meaningful in custom/known-total mode
+  if (_timerTotal > 0) {
+    const done = doneCountHint || bulkCount;
+    const pct  = Math.min(100, Math.round((done / _timerTotal) * 100));
+    statPct.textContent = pct + '%';
+    if (done > 0 && elapsed > 0) {
+      const secPerCh = _chapterTimes.length >= 2
+        ? (_chapterTimes[_chapterTimes.length-1] - _chapterTimes[0]) / 1000 / (_chapterTimes.length - 1)
+        : elapsed / done;
+      const remaining = (_timerTotal - done) * secPerCh;
+      statEta.textContent = '🕐 ' + fmtDur(remaining) + ' left';
+    } else {
+      statEta.textContent = '🕐 ETA …';
+    }
+  }
+}
 
 /* ── SESSION LOG (sessionStorage, cleared on reload) ── */
 const SESSION_LOG_KEY = 'nb_session_log';
@@ -1380,6 +1473,7 @@ bulkStartBtn.addEventListener('click', async () => {
     progressCurrent.textContent = `0 / ${rawUrls.length} chapters…`;
     canvasIndicatorText.textContent = `Custom list: ${rawUrls.length} URLs`;
     setBulkUI(true); showStatus(statusBulk, `🚀 Scraping ${rawUrls.length} custom URLs…`, 'warn', true);
+    startBulkTimer(rawUrls.length);
     runCustomUrlLoop(rawUrls);
   } else {
     const url = urlInput.value.trim();
@@ -1387,10 +1481,11 @@ bulkStartBtn.addEventListener('click', async () => {
     bulkStartUrl = url; progressCurrent.textContent = 'Fetching first chapter…';
     canvasIndicatorText.textContent = '0 chapters scraped';
     setBulkUI(true); showStatus(statusBulk, '🚀 Scraping via hidden canvas — no tab opened!', 'warn', true);
+    startBulkTimer(0);
     runBulkLoop(url);
   }
 });
-bulkStopBtn.addEventListener('click', () => { bulkStopped = true; setBulkUI(false); progressLabel.textContent = 'STOPPING…'; showStatus(statusBulk, '⏹ Stopping after current chapter…', 'warn', true); });
+bulkStopBtn.addEventListener('click', () => { bulkStopped = true; setBulkUI(false); stopBulkTimer(); progressLabel.textContent = 'STOPPING…'; showStatus(statusBulk, '⏹ Stopping after current chapter…', 'warn', true); });
 
 async function runBulkLoop(startUrl) {
   let currentUrl = startUrl;
@@ -1418,12 +1513,13 @@ async function runBulkLoop(startUrl) {
       bulkChunks.push({ title, content, raw: chunk }); updateBulkOutput();
       chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount === 1 ? '' : 's');
       bulkChapterTitle.textContent = title; canvasIndicatorText.textContent = `${bulkCount} chapter${bulkCount===1?'':'s'} scraped`;
+      recordChapterDone(bulkCount);
       const nav = getNextUrlFromHtml(html);
       if (nav.isLast || !nav.nextUrl) { finishBulk('continuous'); break; }
       currentUrl = nav.nextUrl; await sleep(800);
     } catch(err) {
       // All 4 attempts exhausted for this chapter — stop the run
-      setBulkUI(false);
+      setBulkUI(false); stopBulkTimer();
       showStatus(statusBulk, `✗ Failed after 4 attempts on "${trunc(currentUrl,35)}": ${err.message}`, 'error', true);
       if (bulkCount > 0) {
         autoSaveHistory({ type: 'bulk', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
@@ -1433,6 +1529,7 @@ async function runBulkLoop(startUrl) {
     }
   }
   if (bulkStopped && bulkText) {
+    stopBulkTimer();
     autoSaveHistory({ type: 'bulk', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
     showStatus(statusBulk, `⏹ Stopped — ${bulkCount} chapters saved to history.`, 'warn', true);
   }
@@ -1469,10 +1566,11 @@ async function runCustomUrlLoop(urls) {
     chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount===1?'':'s');
     bulkChapterTitle.textContent = `[${i+1}/${total}] ${title}`;
     canvasIndicatorText.textContent = `${bulkCount}/${total} scraped`;
+    recordChapterDone(i + 1);
     await sleep(800);
   }
-  if (!bulkStopped) { progressBarFill.style.width = '100%'; finishBulk('custom'); }
-  else if (bulkText) { setBulkUI(false); autoSaveHistory({ type: 'custom', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) }); showStatus(statusBulk, `⏹ Stopped — ${bulkCount} chapters saved to history.`, 'warn', true); }
+  if (!bulkStopped) { progressBarFill.style.width = '100%'; stopBulkTimer(); finishBulk('custom'); }
+  else if (bulkText) { stopBulkTimer(); setBulkUI(false); autoSaveHistory({ type: 'custom', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) }); showStatus(statusBulk, `⏹ Stopped — ${bulkCount} chapters saved to history.`, 'warn', true); }
 }
 
 function updateBulkOutput() {
@@ -1483,7 +1581,7 @@ function updateBulkOutput() {
   bulkCopyBtn.disabled = bulkPrintBtn.disabled = bulkClearBtn.disabled = false;
 }
 function finishBulk(type) {
-  setBulkUI(false); bulkChapterTitle.textContent = `Done — ${bulkCount} chapters`;
+  setBulkUI(false); stopBulkTimer(); bulkChapterTitle.textContent = `Done — ${bulkCount} chapters`;
   autoSaveHistory({ type: type === 'custom' ? 'custom' : 'bulk', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
   const s = calcStats(bulkText);
   showStatus(statusBulk, `✓ Done — ${bulkCount} chapters scraped & saved!`, 'success', true);
