@@ -119,7 +119,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);min-hei
   <!-- top bar -->
   <div class="topbar">
     <div class="logo">⬡ Explorer</div>
-    <input class="url-input" id="url-input" type="text" placeholder="github.com/user/repo  or  user/repo/tree/branch/path" spellcheck="false" autocomplete="off"/>
+    <input class="url-input" id="url-input" type="text" placeholder="github.com/user  or  github.com/user/repo  or  user/repo/tree/branch/path" spellcheck="false" autocomplete="off"/>
     <button class="go-btn" id="go-btn" onclick="goUrl()">Go</button>
   </div>
 
@@ -182,7 +182,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);min-hei
 
 <script>
 // ── state ──────────────────────────────────────────────────────────────────
-let state = { owner:'', repo:'', branch:'HEAD', path:'' };
+// mode: 'user' = listing repos for an owner, 'repo' = browsing a repo
+let state = { mode:'repo', owner:'', repo:'', branch:'HEAD', path:'' };
 let allItems = [];
 let sortKey = 'name';
 let sortDir = 1; // 1=asc -1=desc
@@ -240,9 +241,11 @@ function parseUrl(input) {
     .replace(/^https?:\/\/(www\.)?github\.com\//, '')
     .replace(/^github\.com\//, '');
   const treeM = clean.match(/^([^/]+)\/([^/]+)\/tree\/([^/]+)\/?(.*)$/);
-  if (treeM) return { owner:treeM[1], repo:treeM[2], branch:treeM[3], path:treeM[4]||'' };
-  const simM = clean.match(/^([^/]+)\/([^/]+)$/);
-  if (simM) return { owner:simM[1], repo:simM[2], branch:'HEAD', path:'' };
+  if (treeM) return { mode:'repo', owner:treeM[1], repo:treeM[2], branch:treeM[3], path:treeM[4]||'' };
+  const repoM = clean.match(/^([^/]+)\/([^/]+)$/);
+  if (repoM) return { mode:'repo', owner:repoM[1], repo:repoM[2], branch:'HEAD', path:'' };
+  const userM = clean.match(/^([^/]+)$/);
+  if (userM) return { mode:'user', owner:userM[1], repo:'', branch:'HEAD', path:'' };
   return null;
 }
 
@@ -279,16 +282,24 @@ function renderBreadcrumb() {
   const bc = document.getElementById('breadcrumb');
   bc.innerHTML = '';
   const parts = [];
-  // root
-  parts.push({ label: state.owner + '/' + state.repo, path: '' });
-  if (state.path) {
-    const segs = state.path.split('/').filter(Boolean);
-    let built = '';
-    segs.forEach(seg => {
-      built = built ? built + '/' + seg : seg;
-      parts.push({ label: seg, path: built });
-    });
+
+  // owner crumb — always clickable (goes to user repos view)
+  parts.push({ label: state.owner, action: () => loadUser() });
+
+  if (state.mode === 'repo') {
+    // repo crumb
+    parts.push({ label: state.repo, action: () => { state.path = ''; loadDir(); } });
+    if (state.path) {
+      const segs = state.path.split('/').filter(Boolean);
+      let built = '';
+      segs.forEach(seg => {
+        built = built ? built + '/' + seg : seg;
+        const p = built;
+        parts.push({ label: seg, action: () => navigate(p) });
+      });
+    }
   }
+
   parts.forEach((p, i) => {
     const span = document.createElement('span');
     span.textContent = p.label;
@@ -296,7 +307,7 @@ function renderBreadcrumb() {
       span.className = 'crumb active';
     } else {
       span.className = 'crumb';
-      span.onclick = () => navigate(p.path);
+      span.onclick = p.action;
     }
     bc.appendChild(span);
     if (i < parts.length - 1) {
@@ -319,6 +330,14 @@ function sortBy(key) {
 }
 
 function sortedItems() {
+  if (state.mode === 'user') {
+    return [...allItems].sort((a, b) => {
+      if (sortKey === 'name') return sortDir * a.name.localeCompare(b.name);
+      if (sortKey === 'size') return sortDir * ((a.stargazers_count||0) - (b.stargazers_count||0));
+      if (sortKey === 'type') return sortDir * (a.language||'').localeCompare(b.language||'');
+      return 0;
+    });
+  }
   return [...allItems].sort((a, b) => {
     // folders always first
     if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
@@ -349,7 +368,10 @@ function renderItems() {
   document.getElementById('empty').style.display = 'none';
 
   // "go up" row
-  if (state.path) {
+  if (state.mode === 'user') {
+    // no up row at user level
+  } else if (state.path) {
+    // go up within repo
     const upParts = state.path.split('/').filter(Boolean);
     upParts.pop();
     const upPath = upParts.join('/');
@@ -363,13 +385,36 @@ function renderItems() {
     `;
     tr.onclick = () => navigate(upPath);
     tbody.appendChild(tr);
+  } else {
+    // at repo root — go up to user repos
+    const tr = document.createElement('tr');
+    tr.style.animationDelay = '0ms';
+    tr.innerHTML = `
+      <td class="icon-cell"><div class="ficon" style="font-size:16px">⬆️</div></td>
+      <td><div class="fname folder">..</div></td>
+      <td><span class="fsize">${state.owner}</span></td>
+      <td></td>
+    `;
+    tr.onclick = () => loadUser();
+    tbody.appendChild(tr);
   }
 
   items.forEach((item, i) => {
     const tr = document.createElement('tr');
     tr.style.animationDelay = (i * 20) + 'ms';
 
-    if (item.type === 'dir') {
+    if (state.mode === 'user') {
+      // repo listing row
+      const desc = item.description ? `<span class="fsize" style="display:block;margin-top:2px;white-space:normal;max-width:340px">${item.description}</span>` : '';
+      const lang = item.language ? `<span class="fsize">${item.language}</span>` : '<span class="fsize">—</span>';
+      tr.innerHTML = `
+        <td class="icon-cell"><div class="ficon" style="font-size:18px">${item.fork ? '🍴' : '📦'}</div></td>
+        <td><div class="fname folder" title="${item.name}">${item.name}</div>${desc}</td>
+        <td>${lang}</td>
+        <td><div class="actions"><span class="abtn">Open →</span></div></td>
+      `;
+      tr.onclick = () => openRepo(item.name, item.default_branch || 'HEAD');
+    } else if (item.type === 'dir') {
       tr.innerHTML = `
         <td class="icon-cell"><div class="ficon" style="font-size:18px">📁</div></td>
         <td><div class="fname folder" title="${item.name}">${item.name}</div></td>
@@ -414,6 +459,50 @@ function escQ(s) { return (s||'').replace(/'/g, "\\'"); }
 function navigate(newPath) {
   state.path = newPath;
   loadDir();
+}
+
+function openRepo(repoName, branch) {
+  state.mode = 'repo';
+  state.repo = repoName;
+  state.branch = branch || 'HEAD';
+  state.path = '';
+  loadDir();
+}
+
+// ── load user repos ─────────────────────────────────────────────────────────
+async function loadUser() {
+  clearErr();
+  document.getElementById('table-wrap').style.display = 'none';
+  document.getElementById('toolbar').style.display = 'none';
+
+  state.mode = 'user';
+  state.repo = '';
+  state.path = '';
+
+  renderBreadcrumb();
+  setStatus('spin', 'Loading repos…');
+
+  document.getElementById('url-input').value = `github.com/${state.owner}`;
+  document.title = state.owner + ' — GitHub Explorer';
+
+  try {
+    const res = await fetch(`https://api.github.com/users/${state.owner}/repos?per_page=100&sort=updated`, {
+      headers: { Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!res.ok) {
+      if (res.status === 404) throw new Error('User not found.');
+      if (res.status === 403) throw new Error('GitHub API rate limit hit. Wait a minute and try again.');
+      throw new Error('GitHub API error: ' + res.status);
+    }
+    allItems = await res.json();
+    setStatus('ok', `${allItems.length} repositor${allItems.length !== 1 ? 'ies' : 'y'}`);
+    document.getElementById('toolbar').style.display = 'flex';
+    document.getElementById('table-wrap').style.display = 'block';
+    renderItems();
+  } catch(err) {
+    setStatus('err', 'Failed to load.');
+    showErr(err.message);
+  }
 }
 
 // ── load directory ─────────────────────────────────────────────────────────
@@ -509,9 +598,10 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModalDi
 function goUrl() {
   const input = document.getElementById('url-input').value.trim();
   const parsed = parseUrl(input);
-  if (!parsed) { clearErr(); showErr('Could not parse URL. Try: github.com/user/repo or github.com/user/repo/tree/branch/path'); return; }
+  if (!parsed) { clearErr(); showErr('Could not parse URL. Try: github.com/user  or  github.com/user/repo'); return; }
   state = parsed;
-  loadDir();
+  if (state.mode === 'user') loadUser();
+  else loadDir();
 }
 document.getElementById('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') goUrl(); });
 
