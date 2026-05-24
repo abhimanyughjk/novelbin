@@ -355,7 +355,7 @@
             <div class="pdf-size">${fmt(pdf.size)}</div>
           </div>
           <div class="pdf-actions">
-            ${pdf.download_url ? `<a class="abtn" href="${pdf.download_url}" target="_blank" rel="noopener">View</a>` : ''}
+            ${pdf.download_url ? `<a class="abtn" href="https://docs.google.com/viewer?url=${encodeURIComponent(pdf.download_url)}" target="_blank" rel="noopener">View</a>` : ''}
             ${pdf.download_url ? `<a class="abtn dl" href="${pdf.download_url}" download target="_blank" rel="noopener">↓ Download</a>` : ''}
           </div>
         `;
