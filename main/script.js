@@ -805,9 +805,13 @@ bulkStartBtn.addEventListener('click', async () => {
     const rawUrls = parseUrlList(urlListInput.value).filter(u => u.includes('novelbin.com'));
     if (rawUrls.length === 0) { showStatus(statusBulk, '⚠ No valid novelbin.com URLs in list. Paste URLs and validate first.', 'error', true); return; }
     customUrlList = rawUrls; bulkStartUrl = rawUrls[0];
+    const batchSz = rawUrls.length > 100 ? 8 : rawUrls.length > 30 ? 5 : 3;
     progressCurrent.textContent = `0 / ${rawUrls.length} chapters…`;
     canvasIndicatorText.textContent = `Custom list: ${rawUrls.length} URLs`;
-    setBulkUI(true); showStatus(statusBulk, `🚀 Scraping ${rawUrls.length} custom URLs…`, 'warn', true);
+    setBulkUI(true);
+    showStatus(statusBulk,
+      `🚀 Scraping ${rawUrls.length} URLs in parallel batches of ${batchSz} — order preserved!`,
+      'warn', true);
     startBulkTimer(rawUrls.length);
     runCustomUrlLoop(rawUrls);
   } else {
@@ -871,39 +875,75 @@ async function runBulkLoop(startUrl) {
 }
 
 async function runCustomUrlLoop(urls) {
-  const total = urls.length;
-  for (let i = 0; i < total; i++) {
-    if (bulkStopped) break;
+  const total      = urls.length;
+  const BATCH_SIZE = total > 100 ? 8 : total > 30 ? 5 : 3; // parallel workers per batch
+  // results[i] holds the extracted data for urls[i], preserving original order
+  const results    = new Array(total).fill(null);
+  let   doneCount  = 0; // chapters successfully extracted so far
+
+  // Process one URL and store result at its original index
+  async function fetchOne(i) {
+    if (bulkStopped) return;
     const url = urls[i];
     let html;
     try {
-      progressCurrent.textContent = `[${i+1}/${total}] Fetching: ${trunc(url, 50)}`;
-      progressBarFill.style.width = Math.round((i / total) * 100) + '%';
       html = await withRetry(
         () => fetchPageHtml(url),
         { maxAttempts: 4, onRetry: (attempt, max, err, delay) => {
-          progressCurrent.textContent = `[${i+1}/${total}] Retry ${attempt}/${max}: ${trunc(url, 38)} — wait ${(delay/1000).toFixed(1)}s`;
-          canvasIndicatorText.textContent = `Chapter ${i+1}/${total}: retry ${attempt}/${max}`;
+          canvasIndicatorText.textContent = `Ch ${i+1}: retry ${attempt}/${max}…`;
         }}
       );
     } catch(err) {
-      // All retries exhausted — skip this chapter and note it
-      canvasIndicatorText.textContent = `[${i+1}/${total}] Skipped after 4 retries`;
-      showStatus(statusBulk, `⚠ Skipped [${i+1}/${total}] after 4 failed attempts: ${trunc(url,35)}`, 'warn', true);
-      await sleep(600); continue;
+      results[i] = { skipped: true, url, reason: err.message };
+      showStatus(statusBulk, `⚠ Skipped [${i+1}/${total}] after 4 retries: ${trunc(url,35)}`, 'warn', true);
+      return;
     }
     const { title, content, error } = extractFromHtml(html, url);
-    if (error && !content) { canvasIndicatorText.textContent = `[${i+1}/${total}] Skipped: ${trunc(title||url,30)}`; await sleep(400); continue; }
-    bulkCount++; bulkLastTitle = title;
-    if (!bulkFirstTitle) bulkFirstTitle = title;
-    const chunk = `\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
-    bulkChunks.push({ title, content, raw: chunk }); updateBulkOutput();
-    chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount===1?'':'s');
-    bulkChapterTitle.textContent = `[${i+1}/${total}] ${title}`;
-    canvasIndicatorText.textContent = `${bulkCount}/${total} scraped`;
-    recordChapterDone(i + 1);
-    await sleep(800);
+    if (error && !content) {
+      results[i] = { skipped: true, url, reason: error };
+      return;
+    }
+    results[i] = { title, content, url };
   }
+
+  // Split all URLs into batches of BATCH_SIZE and run each batch in parallel
+  for (let batchStart = 0; batchStart < total; batchStart += BATCH_SIZE) {
+    if (bulkStopped) break;
+
+    const batchEnd     = Math.min(batchStart + BATCH_SIZE, total);
+    const batchIndices = [];
+    for (let k = batchStart; k < batchEnd; k++) batchIndices.push(k);
+
+    // Update UI: show which batch we're processing
+    progressCurrent.textContent =
+      `Batch ${Math.floor(batchStart/BATCH_SIZE)+1}/${Math.ceil(total/BATCH_SIZE)} — ` +
+      `chapters ${batchStart+1}–${batchEnd} of ${total} (${BATCH_SIZE} parallel)`;
+    progressBarFill.style.width = Math.round((batchStart / total) * 100) + '%';
+
+    // Run all fetches in this batch simultaneously
+    await Promise.all(batchIndices.map(i => fetchOne(i)));
+
+    // After the batch completes, commit results in order and update the output
+    for (const i of batchIndices) {
+      const r = results[i];
+      if (!r || r.skipped) continue;
+      doneCount++;
+      bulkCount++;
+      bulkLastTitle = r.title;
+      if (!bulkFirstTitle) bulkFirstTitle = r.title;
+      const raw = `\n\n${'─'.repeat(60)}\n${r.title}\n${'─'.repeat(60)}\n\n${r.content}`;
+      bulkChunks.push({ title: r.title, content: r.content, raw });
+    }
+    updateBulkOutput();
+    chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount===1?'':'s');
+    bulkChapterTitle.textContent = `Batch done — ${bulkCount}/${total} scraped`;
+    canvasIndicatorText.textContent = `${bulkCount}/${total} done`;
+    recordChapterDone(batchEnd);
+
+    // Small polite pause between batches so we don't hammer the server
+    if (batchEnd < total && !bulkStopped) await sleep(600);
+  }
+
   if (!bulkStopped) { progressBarFill.style.width = '100%'; stopBulkTimer(); finishBulk('custom'); }
   else if (bulkText) { stopBulkTimer(); setBulkUI(false); autoSaveHistory({ type: 'custom', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) }); showStatus(statusBulk, `⏹ Stopped — ${bulkCount} chapters saved to history.`, 'warn', true); }
 }
