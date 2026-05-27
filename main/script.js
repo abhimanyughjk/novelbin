@@ -1150,4 +1150,3 @@ doPrintBtn.addEventListener('click', () => {
 /* ── INIT ── */
 loadPrintConfig(); renderExtracts();
 try { if (window.location.href.includes('novelbin.com')) urlInput.value = window.location.href; } catch {}
-</script>
