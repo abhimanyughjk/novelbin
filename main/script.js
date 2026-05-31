@@ -332,20 +332,42 @@ const CORS_PROXIES = [
   u => `https://thingproxy.freeboard.io/fetch/${u}`,
   u => `https://cors-anywhere.herokuapp.com/${u}`,
 ];
-async function fetchPageHtml(url) {
-  // Direct fetch first (no proxy overhead, works for same-origin or open CORS endpoints)
+
+// Hard timeout wrapper — prevents a hanging proxy from stalling an entire batch
+async function fetchWithTimeout(input, opts = {}, ms = 14000) {
+  const ctrl = new AbortController();
+  const tid   = setTimeout(() => ctrl.abort(), ms);
   try {
-    const r = await fetch(url, { credentials: 'omit', cache: 'no-store' });
+    return await fetch(input, { ...opts, signal: ctrl.signal });
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+// Shuffle in-place (Fisher-Yates) so parallel requests spread across proxies
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+async function fetchPageHtml(url) {
+  // Direct fetch first (no proxy overhead)
+  try {
+    const r = await fetchWithTimeout(url, { credentials: 'omit', cache: 'no-store' }, 10000);
     if (r.ok) { const t = await r.text(); if (t && t.length > 500) return t; }
   } catch {}
-  // Try each proxy in turn; stop at the first that returns real content
-  for (const makeProxy of CORS_PROXIES) {
+  // Shuffle proxy order so concurrent batch fetches don't all pile onto the same proxy
+  const proxies = shuffleArray([...CORS_PROXIES]);
+  for (const makeProxy of proxies) {
     try {
-      const r = await fetch(makeProxy(url), { cache: 'no-store' });
+      const r = await fetchWithTimeout(makeProxy(url), { cache: 'no-store' }, 14000);
       if (r.ok) { const t = await r.text(); if (t && t.length > 500) return t; }
     } catch {}
   }
-  throw new Error('Could not fetch the page — all proxies failed. If this keeps happening, try opening the novel page in a new tab first, then paste the URL here.');
+  throw new Error('All proxies failed');
 }
 function extractFromHtml(html, url) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -876,58 +898,46 @@ async function runBulkLoop(startUrl) {
 
 async function runCustomUrlLoop(urls) {
   const total      = urls.length;
-  const BATCH_SIZE = total > 100 ? 8 : total > 30 ? 5 : 3; // parallel workers per batch
-  // results[i] holds the extracted data for urls[i], preserving original order
+  const BATCH_SIZE = total > 100 ? 8 : total > 30 ? 5 : 3;
   const results    = new Array(total).fill(null);
-  let   doneCount  = 0; // chapters successfully extracted so far
+  const failedIdxs = []; // indices that exhausted all retries in main pass
 
-  // Process one URL and store result at its original index
-  async function fetchOne(i) {
+  // ── fetch + extract one URL, store at results[i] ──────────────────────
+  async function fetchOne(i, isRetry = false) {
     if (bulkStopped) return;
     const url = urls[i];
     let html;
     try {
       html = await withRetry(
         () => fetchPageHtml(url),
-        { maxAttempts: 4, onRetry: (attempt, max, err, delay) => {
-          canvasIndicatorText.textContent = `Ch ${i+1}: retry ${attempt}/${max}…`;
-        }}
+        {
+          maxAttempts: isRetry ? 6 : 4,          // extra attempts on retry pass
+          baseDelay:   isRetry ? 3000 : 1200,    // longer backoff on retry pass
+          onRetry: (attempt, max, err, delay) => {
+            canvasIndicatorText.textContent =
+              `Ch ${i+1}${isRetry?' (retry pass)':''}: attempt ${attempt}/${max}…`;
+          }
+        }
       );
     } catch(err) {
       results[i] = { skipped: true, url, reason: err.message };
-      showStatus(statusBulk, `⚠ Skipped [${i+1}/${total}] after 4 retries: ${trunc(url,35)}`, 'warn', true);
+      if (!isRetry) failedIdxs.push(i);
       return;
     }
     const { title, content, error } = extractFromHtml(html, url);
     if (error && !content) {
       results[i] = { skipped: true, url, reason: error };
+      if (!isRetry) failedIdxs.push(i);
       return;
     }
     results[i] = { title, content, url };
   }
 
-  // Split all URLs into batches of BATCH_SIZE and run each batch in parallel
-  for (let batchStart = 0; batchStart < total; batchStart += BATCH_SIZE) {
-    if (bulkStopped) break;
-
-    const batchEnd     = Math.min(batchStart + BATCH_SIZE, total);
-    const batchIndices = [];
-    for (let k = batchStart; k < batchEnd; k++) batchIndices.push(k);
-
-    // Update UI: show which batch we're processing
-    progressCurrent.textContent =
-      `Batch ${Math.floor(batchStart/BATCH_SIZE)+1}/${Math.ceil(total/BATCH_SIZE)} — ` +
-      `chapters ${batchStart+1}–${batchEnd} of ${total} (${BATCH_SIZE} parallel)`;
-    progressBarFill.style.width = Math.round((batchStart / total) * 100) + '%';
-
-    // Run all fetches in this batch simultaneously
-    await Promise.all(batchIndices.map(i => fetchOne(i)));
-
-    // After the batch completes, commit results in order and update the output
-    for (const i of batchIndices) {
+  // ── helper: commit a batch of indices to bulkChunks in order ──────────
+  function commitBatch(indices) {
+    for (const i of indices) {
       const r = results[i];
       if (!r || r.skipped) continue;
-      doneCount++;
       bulkCount++;
       bulkLastTitle = r.title;
       if (!bulkFirstTitle) bulkFirstTitle = r.title;
@@ -936,16 +946,69 @@ async function runCustomUrlLoop(urls) {
     }
     updateBulkOutput();
     chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount===1?'':'s');
-    bulkChapterTitle.textContent = `Batch done — ${bulkCount}/${total} scraped`;
     canvasIndicatorText.textContent = `${bulkCount}/${total} done`;
-    recordChapterDone(batchEnd);
+    recordChapterDone(bulkCount);
+  }
 
-    // Small polite pause between batches so we don't hammer the server
+  // ══ MAIN PASS — parallel batches ══════════════════════════════════════
+  for (let batchStart = 0; batchStart < total; batchStart += BATCH_SIZE) {
+    if (bulkStopped) break;
+    const batchEnd     = Math.min(batchStart + BATCH_SIZE, total);
+    const batchIndices = Array.from({ length: batchEnd - batchStart }, (_, k) => batchStart + k);
+
+    progressCurrent.textContent =
+      `Batch ${Math.floor(batchStart/BATCH_SIZE)+1}/${Math.ceil(total/BATCH_SIZE)} — ` +
+      `ch ${batchStart+1}–${batchEnd} of ${total} (${BATCH_SIZE} parallel)`;
+    progressBarFill.style.width = Math.round((batchStart / total) * 100) + '%';
+
+    await Promise.all(batchIndices.map(i => fetchOne(i, false)));
+    commitBatch(batchIndices);
+
     if (batchEnd < total && !bulkStopped) await sleep(600);
   }
 
-  if (!bulkStopped) { progressBarFill.style.width = '100%'; stopBulkTimer(); finishBulk('custom'); }
-  else if (bulkText) { stopBulkTimer(); setBulkUI(false); autoSaveHistory({ type: 'custom', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) }); showStatus(statusBulk, `⏹ Stopped — ${bulkCount} chapters saved to history.`, 'warn', true); }
+  // ══ RETRY PASS — re-attempt everything that failed in main pass ════════
+  if (!bulkStopped && failedIdxs.length > 0) {
+    showStatus(statusBulk,
+      `⚠ ${failedIdxs.length} chapter${failedIdxs.length===1?'':'s'} failed — retrying with longer delays…`,
+      'warn', true);
+    progressBarFill.style.width = '95%';
+
+    // Re-fetch one at a time (sequential) with a generous cooldown between each
+    // so rate-limited proxies have time to recover
+    for (let ri = 0; ri < failedIdxs.length; ri++) {
+      if (bulkStopped) break;
+      const i = failedIdxs[ri];
+      progressCurrent.textContent =
+        `Retry pass ${ri+1}/${failedIdxs.length}: ch ${i+1} of ${total} — ${trunc(urls[i], 40)}`;
+      results[i] = null; // clear old failure so commitBatch picks up a fresh result
+      await fetchOne(i, true);
+      commitBatch([i]);
+      bulkChapterTitle.textContent = results[i] && !results[i].skipped
+        ? `✓ Retry ok: ${results[i].title}`
+        : `✗ Still failed: ch ${i+1}`;
+      if (ri < failedIdxs.length - 1 && !bulkStopped) await sleep(2500); // longer cooldown
+    }
+  }
+
+  // ══ FINISH — report any permanently failed chapters ═══════════════════
+  const stillFailed = failedIdxs.filter(i => results[i] && results[i].skipped);
+  if (!bulkStopped) {
+    progressBarFill.style.width = '100%';
+    stopBulkTimer();
+    if (stillFailed.length > 0) {
+      const nums = stillFailed.map(i => i + 1).join(', ');
+      showStatus(statusBulk,
+        `⚠ Done — ${bulkCount} scraped, but ${stillFailed.length} chapter(s) could not be fetched (proxy blocked?): #${nums}`,
+        'warn', true);
+    }
+    finishBulk('custom');
+  } else if (bulkText) {
+    stopBulkTimer();
+    setBulkUI(false);
+    autoSaveHistory({ type: 'custom', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
+    showStatus(statusBulk, `⏹ Stopped — ${bulkCount} chapters saved to history.`, 'warn', true);
+  }
 }
 
 function updateBulkOutput() {
