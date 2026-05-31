@@ -896,6 +896,52 @@ async function runBulkLoop(startUrl) {
   }
 }
 
+
+/* ── MANUAL PASTE MODAL ───────────────────────────────────────────────────
+   Shows a popup asking the user to paste chapter text manually.
+   Returns { pasted: true, title, content } or { pasted: false }.       */
+function askUserPaste(chapterIndex, total, url) {
+  return new Promise(resolve => {
+    const modal    = document.getElementById('pasteModal');
+    const subtitle = document.getElementById('pasteModalSubtitle');
+    const link     = document.getElementById('pasteModalLink');
+    const textarea = document.getElementById('pasteModalTextarea');
+    const btnSkip  = document.getElementById('pasteModalSkip');
+    const btnUse   = document.getElementById('pasteModalUse');
+
+    subtitle.textContent = `Chapter ${chapterIndex + 1} of ${total} — ${url}`;
+    link.href = url;
+    textarea.value = '';
+    modal.style.display = 'flex';
+    textarea.focus();
+
+    function cleanup() {
+      modal.style.display = 'none';
+      btnSkip.removeEventListener('click', onSkip);
+      btnUse.removeEventListener('click',  onUse);
+    }
+
+    function onSkip() {
+      cleanup();
+      resolve({ pasted: false });
+    }
+
+    function onUse() {
+      const raw = textarea.value.trim();
+      if (!raw) { onSkip(); return; }
+      // Try to pull a title from the first non-empty line
+      const lines   = raw.split('\n').map(l => l.trim()).filter(Boolean);
+      const title   = lines[0].length < 120 ? lines[0] : `Chapter ${chapterIndex + 1}`;
+      const content = lines.slice(title === lines[0] ? 1 : 0).join('\n\n').trim() || raw;
+      cleanup();
+      resolve({ pasted: true, title, content });
+    }
+
+    btnSkip.addEventListener('click', onSkip);
+    btnUse.addEventListener('click',  onUse);
+  });
+}
+
 async function runCustomUrlLoop(urls) {
   const total      = urls.length;
   const BATCH_SIZE = total > 100 ? 8 : total > 30 ? 5 : 3;
@@ -967,39 +1013,63 @@ async function runCustomUrlLoop(urls) {
     if (batchEnd < total && !bulkStopped) await sleep(600);
   }
 
-  // ══ RETRY PASS — re-attempt everything that failed in main pass ════════
+  // ══ RETRY PASS — re-attempt everything that failed, then ask user ════════
   if (!bulkStopped && failedIdxs.length > 0) {
     showStatus(statusBulk,
       `⚠ ${failedIdxs.length} chapter${failedIdxs.length===1?'':'s'} failed — retrying with longer delays…`,
       'warn', true);
     progressBarFill.style.width = '95%';
 
-    // Re-fetch one at a time (sequential) with a generous cooldown between each
-    // so rate-limited proxies have time to recover
     for (let ri = 0; ri < failedIdxs.length; ri++) {
       if (bulkStopped) break;
       const i = failedIdxs[ri];
       progressCurrent.textContent =
         `Retry pass ${ri+1}/${failedIdxs.length}: ch ${i+1} of ${total} — ${trunc(urls[i], 40)}`;
-      results[i] = null; // clear old failure so commitBatch picks up a fresh result
+      results[i] = null;
       await fetchOne(i, true);
-      commitBatch([i]);
-      bulkChapterTitle.textContent = results[i] && !results[i].skipped
-        ? `✓ Retry ok: ${results[i].title}`
-        : `✗ Still failed: ch ${i+1}`;
-      if (ri < failedIdxs.length - 1 && !bulkStopped) await sleep(2500); // longer cooldown
+
+      if (results[i] && !results[i].skipped) {
+        // Retry succeeded
+        commitBatch([i]);
+        bulkChapterTitle.textContent = `✓ Retry ok: ${results[i].title}`;
+      } else {
+        // Still failed — ask user to paste manually
+        bulkChapterTitle.textContent = `✗ Still failed: ch ${i+1} — waiting for you…`;
+        const answer = await askUserPaste(i, total, urls[i]);
+
+        if (answer.pasted) {
+          // User pasted content — inject it as if it was scraped normally
+          results[i] = { title: answer.title, content: answer.content, url: urls[i] };
+          commitBatch([i]);
+          bulkChapterTitle.textContent = `✓ Manual paste: ${answer.title}`;
+        } else {
+          // User skipped — insert a visible placeholder so the gap is obvious
+          const placeholder =
+            `[Chapter ${i+1} could not be fetched — open manually: ${urls[i]}]`;
+          results[i] = {
+            title:   `Chapter ${i+1} [MISSING]`,
+            content: placeholder,
+            url:     urls[i],
+            missing: true
+          };
+          commitBatch([i]);
+          bulkChapterTitle.textContent = `— Placeholder inserted for ch ${i+1}`;
+        }
+      }
+
+      if (ri < failedIdxs.length - 1 && !bulkStopped) await sleep(2500);
     }
   }
 
-  // ══ FINISH — report any permanently failed chapters ═══════════════════
-  const stillFailed = failedIdxs.filter(i => results[i] && results[i].skipped);
+  // ══ FINISH ═════════════════════════════════════════════════════════════
   if (!bulkStopped) {
     progressBarFill.style.width = '100%';
     stopBulkTimer();
-    if (stillFailed.length > 0) {
-      const nums = stillFailed.map(i => i + 1).join(', ');
+    const missing = failedIdxs.filter(i => results[i] && results[i].missing);
+    if (missing.length > 0) {
+      const nums = missing.map(i => i + 1).join(', ');
       showStatus(statusBulk,
-        `⚠ Done — ${bulkCount} scraped, but ${stillFailed.length} chapter(s) could not be fetched (proxy blocked?): #${nums}`,
+        `⚠ Done — ${bulkCount} entries saved. ${missing.length} placeholder(s) inserted for ch: #${nums}`,
         'warn', true);
     }
     finishBulk('custom');
