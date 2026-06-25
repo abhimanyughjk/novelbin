@@ -46,7 +46,7 @@ body::before {
 .url-go { padding: 5px 14px; border-radius: 6px; border: 1px solid var(--accent); background: rgba(0,229,255,.08); color: var(--accent); font-family: var(--ff); font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: all .2s; white-space: nowrap; }
 .url-go:hover { background: rgba(0,229,255,.18); box-shadow: 0 0 10px rgba(0,229,255,.3); }
 
-/* NAV TABS — 5 tabs now */
+/* NAV TABS ‚Äî 5 tabs now */
 #navTabs { position: relative; z-index: 10; flex-shrink: 0; display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--border); }
 .nav-tab { padding: 9px 4px; background: var(--surface); border: none; color: var(--muted); font-family: var(--ff); font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 4px; border-right: 1px solid var(--border); }
 .nav-tab:last-child { border-right: none; }
@@ -171,9 +171,9 @@ textarea.url-list-input::placeholder { color: var(--muted); font-style: italic; 
 .url-validated-url  { font-family: var(--mono); font-size: 10px; color: var(--success); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .url-validated-bad  { color: var(--error) !important; }
 
-/* ══════════════════════════════════
+/* ‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê
    BULK URL EXTRACTOR PANEL STYLES
-══════════════════════════════════ */
+‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê */
 #panelUrlExtractor { gap: 14px; }
 
 .bue-hero {
@@ -244,7 +244,7 @@ textarea.url-list-input::placeholder { color: var(--muted); font-style: italic; 
 .bue-ch-item.selected { background: rgba(245,158,11,.06); }
 .bue-ch-check { width: 14px; height: 14px; border: 1px solid var(--border); border-radius: 3px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all .15s; }
 .bue-ch-item.selected .bue-ch-check { background: var(--accent4); border-color: var(--accent4); }
-.bue-ch-check::after { content: '✓'; font-size: 9px; color: #000; opacity: 0; transition: opacity .15s; }
+.bue-ch-check::after { content: '‚úì'; font-size: 9px; color: #000; opacity: 0; transition: opacity .15s; }
 .bue-ch-item.selected .bue-ch-check::after { opacity: 1; }
 .bue-ch-num  { font-family: var(--mono); font-size: 10px; color: var(--muted); min-width: 28px; }
 .bue-ch-name { font-size: 12px; font-weight: 500; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -357,7 +357,7 @@ select.print-select:focus { border-color: rgba(124,58,237,.4); }
 @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .2; } }
 #printRoot { display: none; }
 
-/* ── MANUAL PASTE MODAL ───────────────────────────────────────────────── */
+/* ‚îÄ‚îÄ MANUAL PASTE MODAL ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 9999;
   background: rgba(0,0,0,.65);
