@@ -318,8 +318,9 @@ tabPrint.addEventListener('click',         () => { switchTab(tabPrint, panelPrin
 urlGoBtn.addEventListener('click', loadUrl);
 urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadUrl(); });
 function loadUrl() {
-  const url = urlInput.value.trim();
+  let url = urlInput.value.trim();
   if (!url) return;
+  if (!url.startsWith('http')) { url = 'https://' + url; urlInput.value = url; }
   if (!isAllowedUrl(url)) { showStatus(statusSingle, '⚠ Must be a novelbin.com or novelarrow.com URL.', 'error', true); switchTab(tabSingle, panelSingle); return; }
   footerText.textContent = `Loaded: ${trunc(url, 55)}`;
   switchTab(tabSingle, panelSingle);
@@ -380,12 +381,47 @@ const CORS_PROXIES = [
 // Hard timeout wrapper — prevents a hanging proxy from stalling an entire batch
 async function fetchWithTimeout(input, opts = {}, ms = 14000) {
   const ctrl = new AbortController();
-  const tid   = setTimeout(() => ctrl.abort(), ms);
+  // If the caller already supplied a signal, chain it
+  const parentSignal = opts.signal;
+  if (parentSignal) {
+    if (parentSignal.aborted) { ctrl.abort(); }
+    else { parentSignal.addEventListener('abort', () => ctrl.abort(), { once: true }); }
+  }
+  const tid = setTimeout(() => ctrl.abort(), ms);
   try {
     return await fetch(input, { ...opts, signal: ctrl.signal });
   } finally {
     clearTimeout(tid);
   }
+}
+
+/**
+ * Race multiple async producers in parallel.
+ * Returns the result of the first one that resolves with a truthy value.
+ * All losers are cancelled via their AbortSignal passed to each factory.
+ * If all fail/reject, throws the last error.
+ * factories: Array<(signal: AbortSignal) => Promise<T>>
+ */
+async function raceFirst(factories) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let pending = factories.length;
+    let lastErr = new Error('All attempts failed');
+    const ctrls = factories.map(() => new AbortController());
+    function cancelAll() { ctrls.forEach(c => { try { c.abort(); } catch {} }); }
+    factories.forEach((factory, i) => {
+      factory(ctrls[i].signal).then(result => {
+        if (settled) return;
+        settled = true;
+        cancelAll();
+        resolve(result);
+      }).catch(err => {
+        if (!settled) lastErr = err;
+        pending--;
+        if (!settled && pending === 0) reject(lastErr);
+      });
+    });
+  });
 }
 
 // Shuffle in-place (Fisher-Yates) so parallel requests spread across proxies
@@ -398,20 +434,32 @@ function shuffleArray(arr) {
 }
 
 async function fetchPageHtml(url) {
-  // Direct fetch first (no proxy overhead)
+  // Build one factory per proxy (plus direct), race them all in parallel.
+  // The first to return a valid response wins; the rest are aborted.
+  const PER_PROXY_MS = 20000; // generous per-slot timeout
+
+  // Direct fetch factory
+  const directFactory = signal => fetchWithTimeout(url,
+    { credentials: 'omit', cache: 'no-store', signal }, PER_PROXY_MS)
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status);
+                 return r.text(); })
+    .then(t => { if (!t || t.length < 200) throw new Error('Empty response');
+                 return t; });
+
+  // One factory per proxy
+  const proxyFactories = CORS_PROXIES.map(makeProxy => signal =>
+    fetchWithTimeout(makeProxy(url), { cache: 'no-store', signal }, PER_PROXY_MS)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status);
+                   return r.text(); })
+      .then(t => { if (!t || t.length < 200) throw new Error('Empty response');
+                   return t; })
+  );
+
   try {
-    const r = await fetchWithTimeout(url, { credentials: 'omit', cache: 'no-store' }, 10000);
-    if (r.ok) { const t = await r.text(); if (t && t.length > 500) return t; }
-  } catch {}
-  // Shuffle proxy order so concurrent batch fetches don't all pile onto the same proxy
-  const proxies = shuffleArray([...CORS_PROXIES]);
-  for (const makeProxy of proxies) {
-    try {
-      const r = await fetchWithTimeout(makeProxy(url), { cache: 'no-store' }, 14000);
-      if (r.ok) { const t = await r.text(); if (t && t.length > 500) return t; }
-    } catch {}
+    return await raceFirst([directFactory, ...proxyFactories]);
+  } catch {
+    throw new Error('All proxies failed');
   }
-  throw new Error('All proxies failed');
 }
 function extractFromHtml(html, url) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -567,14 +615,19 @@ function bueSlugFromUrl(url) {
 ─────────────────────────────────────────────────────────────────────── */
 
 function isNovelArrowUrl(url) {
-  try { return new URL(url).hostname.includes('novelarrow.com'); } catch { return false; }
+  if (!url) return false;
+  // Normalise: add https:// if missing so new URL() can parse it
+  const u = url.trim();
+  const full = u.startsWith('http') ? u : 'https://' + u;
+  try { return new URL(full).hostname.includes('novelarrow.com'); } catch { return false; }
 }
 
 // Extract novel slug from any novelarrow.com URL:
 //   /novel/<slug>  or  /chapter/<slug>/<chapter-id>
 function novelArrowSlug(url) {
   try {
-    const parts = new URL(url).pathname.split('/').filter(Boolean);
+    const full = (url && !url.trim().startsWith('http')) ? 'https://' + url.trim() : url;
+    const parts = new URL(full).pathname.split('/').filter(Boolean);
     // parts[0] = 'novel' | 'chapter', parts[1] = slug
     return parts[1] || '';
   } catch { return ''; }
@@ -656,46 +709,48 @@ const JSON_PROXY_STRATEGIES = [
 ];
 
 async function fetchJson(url) {
-  // 1. Direct fetch — works when the API sends CORS headers (best case)
-  try {
-    const r = await fetchWithTimeout(url, {
-      credentials: 'omit',
-      cache: 'no-store',
-      headers: { 'Accept': 'application/json' }
-    }, 12000);
-    if (r.ok) {
-      const text = await r.text();
-      // Guard: some proxies return HTML error pages even with 200
-      if (text && (text.trimStart().startsWith('{') || text.trimStart().startsWith('['))) {
-        try { return JSON.parse(text); } catch {}
-      }
-    }
-  } catch {}
+  // Race direct fetch + all proxy strategies in parallel.
+  // First valid JSON object/array wins; losers are aborted immediately.
+  const PER_SLOT_MS = 20000;
 
-  // 2. Try each proxy strategy in shuffled order
-  const strategies = shuffleArray([...JSON_PROXY_STRATEGIES]);
-  let lastErr = 'All proxies failed for JSON fetch';
-  for (const strategy of strategies) {
+  function tryParseJson(text, extractFn) {
+    if (!text || text.length < 2) throw new Error('Empty body');
+    const t = text.trimStart();
+    // Reject obvious HTML error pages
+    if (t.startsWith('<!') || t.startsWith('<html')) throw new Error('Got HTML instead of JSON');
     try {
-      const r = await fetchWithTimeout(strategy.makeUrl(url), { cache: 'no-store' }, 16000);
-      if (!r.ok) continue;
-      const text = await r.text();
-      if (!text || text.length < 2) continue;
-      try {
-        const parsed = strategy.extract(text);
-        if (parsed && typeof parsed === 'object') return parsed;
-      } catch (parseErr) {
-        // This proxy's envelope parse failed — try raw JSON parse as fallback
-        try {
-          const parsed = JSON.parse(text);
-          if (parsed && typeof parsed === 'object') return parsed;
-        } catch {}
-      }
-    } catch (err) {
-      lastErr = err.message || lastErr;
+      const parsed = extractFn ? extractFn(text) : JSON.parse(text);
+      if (parsed && typeof parsed === 'object') return parsed;
+      throw new Error('Non-object result');
+    } catch {
+      // envelope parse failed — fall back to raw JSON parse
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object') return parsed;
+      throw new Error('Could not parse JSON');
     }
   }
-  throw new Error(lastErr);
+
+  // Direct fetch factory
+  const directFactory = signal =>
+    fetchWithTimeout(url, {
+      credentials: 'omit', cache: 'no-store',
+      headers: { 'Accept': 'application/json' }, signal
+    }, PER_SLOT_MS)
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(text => tryParseJson(text, null));
+
+  // One factory per proxy strategy
+  const proxyFactories = JSON_PROXY_STRATEGIES.map(strategy => signal =>
+    fetchWithTimeout(strategy.makeUrl(url), { cache: 'no-store', signal }, PER_SLOT_MS)
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(text => tryParseJson(text, strategy.extract))
+  );
+
+  try {
+    return await raceFirst([directFactory, ...proxyFactories]);
+  } catch {
+    throw new Error('All proxies failed for JSON fetch');
+  }
 }
 
 /**
@@ -929,8 +984,12 @@ bueRangeApply.addEventListener('click', () => {
 });
 
 bueFetchBtn.addEventListener('click', async () => {
-  const raw = novelPageInput.value.trim();
-  if (!raw || !isAllowedUrl(raw)) {
+  let raw = novelPageInput.value.trim();
+  if (!raw) { showStatus(statusBue, '⚠ Enter a novelbin.com or novelarrow.com novel URL.', 'error', true); return; }
+  // Auto-prepend https:// if missing
+  if (!raw.startsWith('http')) raw = 'https://' + raw;
+  novelPageInput.value = raw;
+  if (!isAllowedUrl(raw)) {
     showStatus(statusBue, '⚠ Enter a valid novelbin.com or novelarrow.com novel URL.', 'error', true);
     return;
   }
