@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NovelBin — Chapter Extractor</title>
+  <title>NovelBin / NovelArrow — Chapter Extractor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style id="printStyles">
@@ -19,7 +20,7 @@
   <div class="logo-mark">N</div>
   <div class="header-text">
     <h1>NovelBin Extractor</h1>
-    <p>novelbin.com // chapter ripper — web edition</p>
+    <p>novelbin.com + novelarrow.com // chapter ripper — web edition</p>
   </div>
   <span class="ver-badge">v9.6</span>
 </div>
@@ -27,7 +28,7 @@
 
 <div id="urlBar">
   <span class="url-label">URL →</span>
-  <input id="urlInput" type="url" placeholder="https://novelbin.com/b/novel-slug/chapter-1" spellcheck="false" />
+  <input id="urlInput" type="url" placeholder="https://novelbin.com/b/novel-slug/chapter-1  (or novelarrow.com)" spellcheck="false" />
   <button class="url-go" id="urlGoBtn">Load</button>
 </div>
 
@@ -55,7 +56,7 @@
         <span class="output-label">Extracted Text</span>
         <div class="stats"><span class="stat" id="wordCount">0 words</span><span class="stat" id="charCount">0 chars</span></div>
       </div>
-      <textarea id="output" class="main-out" readonly placeholder="Paste a novelbin chapter URL above, click Load, then Extract…"></textarea>
+      <textarea id="output" class="main-out" readonly placeholder="Paste a novelbin or novelarrow chapter URL above, click Load, then Extract…"></textarea>
     </div>
     <div class="actions">
       <button class="action-btn copy"  id="copyBtn"  disabled>📋 Copy</button>
@@ -76,7 +77,7 @@
         <span class="url-list-meta" id="urlListMeta">0 URLs</span>
       </div>
       <textarea class="url-list-input" id="urlListInput" placeholder="Paste one URL per line:&#10;https://novelbin.com/b/novel/chapter-1&#10;https://novelbin.com/b/novel/chapter-2&#10;...&#10;&#10;Order will be preserved exactly as entered."></textarea>
-      <div class="url-list-hint">One URL per line · <span>novelbin.com</span> links only · duplicates are ignored</div>
+      <div class="url-list-hint">One URL per line · <span>novelbin.com / novelarrow.com</span> links only · duplicates are ignored</div>
       <div class="url-list-actions">
         <button class="url-list-action-btn validate" id="validateUrlsBtn">✓ Validate &amp; Preview</button>
         <button class="url-list-action-btn clear-urls" id="clearUrlListBtn">✕ Clear</button>
@@ -135,12 +136,12 @@
     <div class="bue-hero">
       <div class="bue-hero-title">🔗 Bulk URL Extractor</div>
       <div class="bue-hero-desc">
-        Paste a NovelBin novel page (e.g. <span>novelbin.com/b/novel-slug</span>) and this tool will fetch &amp; list all chapter URLs automatically. Select the ones you want, then send them straight to the Bulk Scraper.
+        Paste a NovelBin or NovelArrow novel page (e.g. <span>novelbin.com/b/novel-slug</span> or <span>novelarrow.com/novel/novel-slug</span>) and this tool will fetch &amp; list all chapter URLs automatically. For NovelArrow, chapters are fetched directly from the JSON API — only free chapters (no premium/coin-locked) are shown. Select the ones you want, then send them straight to the Bulk Scraper.
       </div>
     </div>
 
     <div class="bue-input-row">
-      <input id="novelPageInput" type="url" placeholder="https://novelbin.com/b/infinite-mana-in-the-apocalypse" spellcheck="false" />
+      <input id="novelPageInput" type="url" placeholder="https://novelbin.com/b/novel-slug  OR  https://novelarrow.com/novel/novel-slug" spellcheck="false" />
       <button class="bue-fetch-btn" id="bueFetchBtn">⚡ Fetch Chapters</button>
     </div>
 
@@ -297,7 +298,7 @@
 </div>
 
 <div id="appFooter">
-  <span class="footer-text" id="footerText">Open a NovelBin chapter URL above to get started</span>
+  <span class="footer-text" id="footerText">Open a NovelBin or NovelArrow chapter URL above to get started</span>
   <div class="dot"></div>
 </div>
 
