@@ -1012,7 +1012,7 @@ bueFetchBtn.addEventListener('click', async () => {
         '⚠ No chapters found on that page. NovelBin/NovelArrow may require login or load chapters via JavaScript. ' +
         'Try pasting the page source using the fallback below.',
         'warn', true);
-      document.getElementById('buePastePanel').style.display = 'block';
+      bueShowPastePanel();
       return;
     }
 
@@ -1033,9 +1033,49 @@ bueFetchBtn.addEventListener('click', async () => {
     bueLoader.style.display = 'none';
     bueFetchBtn.disabled = false;
     showStatus(statusBue, '✗ ' + err.message + ' — Try the paste fallback below.', 'error', true);
-    document.getElementById('buePastePanel').style.display = 'block';
+    bueShowPastePanel();
   }
 });
+
+// ── Paste fallback panel: tab switching + auto-select for NovelArrow ──
+const buePasteTabHtml = document.getElementById('buePasteTabHtml');
+const buePasteTabJson = document.getElementById('buePasteTabJson');
+const buePasteHtmlPane = document.getElementById('buePasteHtmlPane');
+const buePasteJsonPane = document.getElementById('buePasteJsonPane');
+const buePasteJsonUrlHint = document.getElementById('buePasteJsonUrlHint');
+
+function buePasteActivateTab(tab) {
+  // tab: 'html' | 'json'
+  const isJson = tab === 'json';
+  buePasteTabHtml.style.background    = isJson ? 'transparent' : 'var(--surface3)';
+  buePasteTabHtml.style.color         = isJson ? 'var(--muted)' : 'var(--text)';
+  buePasteTabJson.style.background    = isJson ? 'var(--surface3)' : 'transparent';
+  buePasteTabJson.style.color         = isJson ? 'var(--text)' : 'var(--muted)';
+  buePasteHtmlPane.style.display      = isJson ? 'none' : '';
+  buePasteJsonPane.style.display      = isJson ? '' : 'none';
+}
+
+function bueShowPastePanel() {
+  const raw = novelPageInput.value.trim();
+  // Auto-select JSON tab for NovelArrow URLs, and populate the hint URL
+  if (isNovelArrowUrl(raw)) {
+    const slug = novelArrowSlug(raw) || bueSlugFromUrl(raw);
+    if (slug) {
+      buePasteJsonUrlHint.textContent =
+        `https://novelarrow.com/api-web/novels/${slug}/chapters?sort=asc`;
+    } else {
+      buePasteJsonUrlHint.textContent =
+        'https://novelarrow.com/api-web/novels/<slug>/chapters?sort=asc';
+    }
+    buePasteActivateTab('json');
+  } else {
+    buePasteActivateTab('html');
+  }
+  document.getElementById('buePastePanel').style.display = 'block';
+}
+
+buePasteTabHtml.addEventListener('click', () => buePasteActivateTab('html'));
+buePasteTabJson.addEventListener('click', () => buePasteActivateTab('json'));
 
 // ── Paste HTML fallback handlers ──────────────────────────────────────
 document.getElementById('buePasteClose').addEventListener('click', () => {
@@ -1074,6 +1114,98 @@ document.getElementById('bueExtractPasteBtn').addEventListener('click', () => {
   document.getElementById('buePastePanel').style.display = 'none';
   showStatus(statusBue, `✓ Extracted ${chapters.length} chapters from pasted source for "${novelTitle}".`, 'success');
   footerText.textContent = `URL Extractor: ${chapters.length} chapters from "${trunc(novelTitle,35)}"`;
+});
+
+// ── JSON paste handler (NovelArrow chapters API response) ──────────────
+document.getElementById('bueExtractJsonBtn').addEventListener('click', () => {
+  const raw = document.getElementById('bueJsonPaste').value.trim();
+  if (!raw) {
+    showStatus(statusBue, '⚠ Paste the JSON first.', 'error', true);
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    showStatus(statusBue, '✗ Invalid JSON — make sure you copied the full API response.', 'error', true);
+    return;
+  }
+
+  // Unwrap allorigins envelope: { contents: "...", status: {...} }
+  // contents is itself a JSON string that needs a second parse
+  if (parsed && typeof parsed.contents === 'string') {
+    try { parsed = JSON.parse(parsed.contents); } catch {
+      showStatus(statusBue, '✗ Could not parse the JSON inside the allorigins envelope.', 'error', true);
+      return;
+    }
+  }
+  // Also unwrap { data: { items: [...] } } nesting
+  if (parsed && parsed.data && !Array.isArray(parsed.data) &&
+      (parsed.data.items || parsed.data.chapters)) {
+    parsed = parsed.data;
+  }
+
+  // Support the same envelope shapes as bueFetchNovelArrowChapters
+  const items = parsed.items || parsed.data || parsed.chapters || [];
+  if (!Array.isArray(items) || items.length === 0) {
+    showStatus(statusBue, '✗ No chapter items found in pasted JSON.', 'error', true);
+    return;
+  }
+
+  // Filter to free chapters only (same logic as API path)
+  const freeItems = items.filter(ch =>
+    ch.premium_content === false &&
+    ch.platinum_content === false &&
+    (ch.coin_price === 0 || ch.coin_price === null || ch.coin_price === undefined)
+  );
+
+  if (freeItems.length === 0) {
+    showStatus(statusBue, '⚠ All chapters in this JSON are premium/coin-locked — nothing to extract.', 'warn', true);
+    return;
+  }
+
+  // Derive the slug from the URL input (or try to find it in item URLs)
+  const rawUrl  = novelPageInput.value.trim();
+  const slug    = (isNovelArrowUrl(rawUrl) && (novelArrowSlug(rawUrl) || bueSlugFromUrl(rawUrl)))
+                  || (freeItems[0]?.chapter_id ? '' : '');
+  const origin  = 'https://novelarrow.com';
+
+  // Build chapter objects — need the slug for the URL
+  // If we can't determine slug from URL input, try to infer from the hint textarea
+  let resolvedSlug = slug;
+  if (!resolvedSlug) {
+    const hintText = buePasteJsonUrlHint ? buePasteJsonUrlHint.textContent : '';
+    const hintMatch = hintText.match(/\/novels\/([\w-]+)\//);
+    if (hintMatch) resolvedSlug = hintMatch[1];
+  }
+
+  const chapters = freeItems.map(ch => ({
+    title: ch.chapter_name || ch.chapter_id || '(untitled)',
+    url:   resolvedSlug
+      ? `${origin}/chapter/${resolvedSlug}/${ch.chapter_id}`
+      : ch.chapter_id,          // fallback — user can still copy the list
+  }));
+
+  const novelTitle = resolvedSlug || 'NovelArrow Novel';
+
+  bueAllChapters = chapters;
+  bueResults.classList.remove('visible');
+  bueNovelTitle.textContent = novelTitle;
+  bueTotalBadge.textContent = chapters.length + ' chapters';
+  bueNovelBadge.textContent = resolvedSlug || 'novel';
+  bueRangeFrom.max = chapters.length;
+  bueRangeTo.max   = chapters.length;
+  bueRangeActive   = { from: 1, to: Infinity };
+  bueOrder         = 'asc';
+  bueOrderSeg.querySelectorAll('.bue-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.order === 'asc'));
+  applyBueFilters();
+  bueResults.classList.add('visible');
+  document.getElementById('buePastePanel').style.display = 'none';
+  const skipped = items.length - freeItems.length;
+  const skipNote = skipped > 0 ? ` (${skipped} premium/locked skipped)` : '';
+  showStatus(statusBue, `✓ Extracted ${chapters.length} free chapters from pasted JSON${skipNote}.`, 'success');
+  footerText.textContent = `URL Extractor: ${chapters.length} chapters from "${trunc(novelTitle, 35)}"`;
 });
 
 novelPageInput.addEventListener('keydown', e => { if (e.key === 'Enter') bueFetchBtn.click(); });
