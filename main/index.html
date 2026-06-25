@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -147,17 +146,45 @@
 
     <!-- Paste HTML fallback — shown after a fetch failure -->
     <div id="buePastePanel" style="display:none; margin-top:10px; border:1px solid rgba(245,158,11,.25); border-radius:8px; padding:12px; background:rgba(245,158,11,.04);">
-      <div style="font-family:var(--mono); font-size:10px; color:var(--accent4); letter-spacing:1px; margin-bottom:6px;">📋 PASTE PAGE SOURCE FALLBACK</div>
-      <div style="font-family:var(--mono); font-size:10px; color:var(--muted); line-height:1.7; margin-bottom:8px;">
-        Auto-fetch blocked? Do this instead:<br>
-        1. Open the novel page in a new tab<br>
-        2. Press <span style="color:var(--text)">Ctrl+U</span> (or right-click → View Page Source)<br>
-        3. Press <span style="color:var(--text)">Ctrl+A</span> then <span style="color:var(--text)">Ctrl+C</span> to copy all<br>
-        4. Paste it below and click Extract
+      <div style="font-family:var(--mono); font-size:10px; color:var(--accent4); letter-spacing:1px; margin-bottom:8px;">📋 PASTE FALLBACK</div>
+
+      <!-- Sub-tabs -->
+      <div style="display:flex; gap:4px; margin-bottom:10px;">
+        <button id="buePasteTabHtml" class="bue-paste-sub active" style="flex:1; padding:5px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface3); color:var(--text); font-family:var(--mono); font-size:10px; cursor:pointer; letter-spacing:.5px;">📄 HTML PAGE SOURCE<br><span style="color:var(--muted);font-size:9px;">(NovelBin / NovelArrow HTML)</span></button>
+        <button id="buePasteTabJson" class="bue-paste-sub" style="flex:1; padding:5px 8px; border-radius:5px; border:1px solid var(--border); background:transparent; color:var(--muted); font-family:var(--mono); font-size:10px; cursor:pointer; letter-spacing:.5px;">{ } JSON API RESPONSE<br><span style="font-size:9px;">(NovelArrow chapters JSON)</span></button>
       </div>
-      <textarea id="bueHtmlPaste" placeholder="Paste full page source here…" spellcheck="false" style="width:100%; height:90px; resize:vertical; background:var(--surface3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:10px; padding:8px; box-sizing:border-box; outline:none;"></textarea>
-      <div style="display:flex; gap:8px; margin-top:7px; align-items:center;">
-        <button class="bue-fetch-btn" id="bueExtractPasteBtn" style="padding:6px 14px;">⚡ Extract from Pasted HTML</button>
+
+      <!-- HTML paste pane -->
+      <div id="buePasteHtmlPane">
+        <div style="font-family:var(--mono); font-size:10px; color:var(--muted); line-height:1.7; margin-bottom:8px;">
+          Auto-fetch blocked? Do this instead:<br>
+          1. Open the novel page in a new tab<br>
+          2. Press <span style="color:var(--text)">Ctrl+U</span> (or right-click → View Page Source)<br>
+          3. Press <span style="color:var(--text)">Ctrl+A</span> then <span style="color:var(--text)">Ctrl+C</span> to copy all<br>
+          4. Paste it below and click Extract
+        </div>
+        <textarea id="bueHtmlPaste" placeholder="Paste full page source here…" spellcheck="false" style="width:100%; height:90px; resize:vertical; background:var(--surface3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:10px; padding:8px; box-sizing:border-box; outline:none;"></textarea>
+        <div style="display:flex; gap:8px; margin-top:7px; align-items:center;">
+          <button class="bue-fetch-btn" id="bueExtractPasteBtn" style="padding:6px 14px;">⚡ Extract from Pasted HTML</button>
+        </div>
+      </div>
+
+      <!-- JSON paste pane -->
+      <div id="buePasteJsonPane" style="display:none;">
+        <div style="font-family:var(--mono); font-size:10px; color:var(--muted); line-height:1.7; margin-bottom:8px;">
+          For <span style="color:var(--text)">novelarrow.com</span> novels, fetch the chapter list JSON directly:<br>
+          1. Open this URL in a new tab (replace <span style="color:var(--text)">&lt;slug&gt;</span> with your novel's slug):<br>
+          &nbsp;&nbsp;<span id="buePasteJsonUrlHint" style="color:var(--accent2); word-break:break-all;">https://novelarrow.com/api-web/novels/&lt;slug&gt;/chapters?sort=asc</span><br>
+          2. Press <span style="color:var(--text)">Ctrl+A</span> then <span style="color:var(--text)">Ctrl+C</span> to copy all the JSON<br>
+          3. Paste it below and click Extract
+        </div>
+        <textarea id="bueJsonPaste" placeholder='Paste the JSON here… e.g. {"items":[{"chapter_id":"chapter-1","chapter_name":"Chapter 1","premium_content":false,...}]}' spellcheck="false" style="width:100%; height:110px; resize:vertical; background:var(--surface3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:10px; padding:8px; box-sizing:border-box; outline:none;"></textarea>
+        <div style="display:flex; gap:8px; margin-top:7px; align-items:center;">
+          <button class="bue-fetch-btn" id="bueExtractJsonBtn" style="padding:6px 14px;">⚡ Extract from Pasted JSON</button>
+        </div>
+      </div>
+
+      <div style="margin-top:8px; text-align:right;">
         <button id="buePasteClose" style="padding:5px 10px; border-radius:5px; border:1px solid var(--border); background:transparent; color:var(--muted); font-family:var(--ff); font-size:11px; cursor:pointer;">✕ Close</button>
       </div>
     </div>
