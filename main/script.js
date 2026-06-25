@@ -1530,51 +1530,36 @@ async function runCustomUrlLoop(urls) {
     if (batchEnd < total && !bulkStopped) await sleep(600);
   }
 
-  // ══ RETRY PASS — re-attempt everything that failed, then ask user ════════
+  // ══ RETRY PASS — re-attempt everything that failed in parallel ══════════
   if (!bulkStopped && failedIdxs.length > 0) {
     showStatus(statusBulk,
       `⚠ ${failedIdxs.length} chapter${failedIdxs.length===1?'':'s'} failed — retrying with longer delays…`,
       'warn', true);
     progressBarFill.style.width = '95%';
 
-    for (let ri = 0; ri < failedIdxs.length; ri++) {
+    const RETRY_BATCH = 4;
+    for (let ri = 0; ri < failedIdxs.length; ri += RETRY_BATCH) {
       if (bulkStopped) break;
-      const i = failedIdxs[ri];
+      const batchSlice = failedIdxs.slice(ri, ri + RETRY_BATCH);
       progressCurrent.textContent =
-        `Retry pass ${ri+1}/${failedIdxs.length}: ch ${i+1} of ${total} — ${trunc(urls[i], 40)}`;
-      results[i] = null;
-      await fetchOne(i, true);
+        `Retry pass: ch ${batchSlice.map(i=>i+1).join(', ')} of ${total}…`;
+      await Promise.all(batchSlice.map(i => { results[i] = null; return fetchOne(i, true); }));
+      const recovered = batchSlice.filter(i => results[i] && !results[i].skipped);
+      if (recovered.length) commitBatch(recovered);
+      if (ri + RETRY_BATCH < failedIdxs.length && !bulkStopped) await sleep(1500);
+    }
 
-      if (results[i] && !results[i].skipped) {
-        // Retry succeeded
-        commitBatch([i]);
-        bulkChapterTitle.textContent = `✓ Retry ok: ${results[i].title}`;
-      } else {
-        // Still failed — ask user to paste manually
-        bulkChapterTitle.textContent = `✗ Still failed: ch ${i+1} — waiting for you…`;
-        const answer = await askUserPaste(i, total, urls[i]);
+    // Insert placeholders for chapters that still failed after retry
+    const stillFailed = failedIdxs.filter(i => !results[i] || results[i].skipped);
+    for (const i of stillFailed) {
+      const placeholder = `[Chapter ${i+1} could not be fetched — open manually: ${urls[i]}]`;
+      results[i] = { title: `Chapter ${i+1} [MISSING]`, content: placeholder, url: urls[i], missing: true };
+      commitBatch([i]);
+    }
 
-        if (answer.pasted) {
-          // User pasted content — inject it as if it was scraped normally
-          results[i] = { title: answer.title, content: answer.content, url: urls[i] };
-          commitBatch([i]);
-          bulkChapterTitle.textContent = `✓ Manual paste: ${answer.title}`;
-        } else {
-          // User skipped — insert a visible placeholder so the gap is obvious
-          const placeholder =
-            `[Chapter ${i+1} could not be fetched — open manually: ${urls[i]}]`;
-          results[i] = {
-            title:   `Chapter ${i+1} [MISSING]`,
-            content: placeholder,
-            url:     urls[i],
-            missing: true
-          };
-          commitBatch([i]);
-          bulkChapterTitle.textContent = `— Placeholder inserted for ch ${i+1}`;
-        }
-      }
-
-      if (ri < failedIdxs.length - 1 && !bulkStopped) await sleep(2500);
+    // Show batch manual-paste tray if anything still needs manual attention
+    if (stillFailed.length > 0 && !bulkStopped) {
+      showBulkPasteTray(stillFailed, urls, results);
     }
   }
 
@@ -1582,13 +1567,6 @@ async function runCustomUrlLoop(urls) {
   if (!bulkStopped) {
     progressBarFill.style.width = '100%';
     stopBulkTimer();
-    const missing = failedIdxs.filter(i => results[i] && results[i].missing);
-    if (missing.length > 0) {
-      const nums = missing.map(i => i + 1).join(', ');
-      showStatus(statusBulk,
-        `⚠ Done — ${bulkCount} entries saved. ${missing.length} placeholder(s) inserted for ch: #${nums}`,
-        'warn', true);
-    }
     finishBulk('custom');
   } else if (bulkText) {
     stopBulkTimer();
@@ -1596,6 +1574,139 @@ async function runCustomUrlLoop(urls) {
     autoSaveHistory({ type: 'custom', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
     showStatus(statusBulk, `⏹ Stopped — ${bulkCount} chapters saved to history.`, 'warn', true);
   }
+}
+
+/* ── BATCH MANUAL PASTE TRAY ─────────────────────────────────────────────
+   Shows a non-blocking list of all failed chapters so the user can paste
+   them one-by-one at their own pace, then apply them all at once.        */
+function showBulkPasteTray(failedIdxList, allUrls, resultsRef) {
+  // Remove any existing tray
+  const existing = document.getElementById('bulkPasteTray');
+  if (existing) existing.remove();
+
+  const count = failedIdxList.length;
+  const tray = document.createElement('div');
+  tray.id = 'bulkPasteTray';
+  tray.style.cssText = [
+    'margin-top:14px',
+    'border:1px solid rgba(245,158,11,.35)',
+    'border-radius:10px',
+    'padding:14px',
+    'background:rgba(245,158,11,.04)',
+    'position:relative',
+  ].join(';');
+
+  tray.innerHTML = `
+    <div style="font-family:var(--mono);font-size:10px;color:var(--accent4);letter-spacing:1.2px;margin-bottom:4px;">
+      ✋ MANUAL PASTE REQUIRED — ${count} CHAPTER${count===1?'':'S'} FAILED
+    </div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.7;margin-bottom:10px;">
+      These chapters could not be fetched even after retrying.
+      For each one: click the link → copy the chapter text → paste it below → click ✓.<br>
+      When done, click <strong style="color:var(--text)">Apply All Pastes</strong> to patch them into the output.
+      Chapters left empty will stay as [MISSING] placeholders.
+    </div>
+    <div id="bulkPasteTrayList" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:12px;"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button id="bulkPasteTrayApply" style="padding:7px 18px;border-radius:6px;border:1px solid var(--success);background:rgba(0,245,160,.1);color:var(--success);font-family:var(--ff);font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;text-transform:uppercase;">
+        ✓ Apply All Pastes
+      </button>
+      <button id="bulkPasteTrayDismiss" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--ff);font-size:11px;cursor:pointer;">
+        Dismiss
+      </button>
+      <span id="bulkPasteTrayStatus" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:4px;"></span>
+    </div>
+  `;
+
+  const list = tray.querySelector('#bulkPasteTrayList');
+
+  failedIdxList.forEach(i => {
+    const url = allUrls[i];
+    const item = document.createElement('div');
+    item.dataset.chIdx = i;
+    item.style.cssText = 'border:1px solid var(--border);border-radius:7px;padding:10px;background:var(--surface3);';
+    item.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--accent4);white-space:nowrap;">Ch ${i+1}</span>
+        <a href="${esc(url)}" target="_blank" rel="noopener"
+           style="font-family:var(--mono);font-size:10px;color:var(--accent);text-decoration:none;
+                  flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+           title="${esc(url)}">🔗 ${esc(url)}</a>
+        <span class="tray-status-badge" style="font-family:var(--mono);font-size:9px;color:var(--muted);white-space:nowrap;">empty</span>
+      </div>
+      <textarea class="tray-paste-area" placeholder="Paste chapter text here…" spellcheck="false"
+        style="width:100%;height:70px;resize:vertical;background:var(--surface);border:1px solid var(--border);
+               border-radius:5px;color:var(--text);font-family:var(--mono);font-size:10px;
+               padding:7px;box-sizing:border-box;outline:none;"></textarea>
+    `;
+
+    // Live badge update
+    const ta = item.querySelector('.tray-paste-area');
+    const badge = item.querySelector('.tray-status-badge');
+    ta.addEventListener('input', () => {
+      const filled = ta.value.trim().length > 0;
+      badge.textContent = filled ? '✓ ready' : 'empty';
+      badge.style.color = filled ? 'var(--success)' : 'var(--muted)';
+      item.style.borderColor = filled ? 'rgba(0,245,160,.3)' : 'var(--border)';
+    });
+
+    list.appendChild(item);
+  });
+
+  // Apply button — patch resultsRef and rebuild bulkOutput
+  tray.querySelector('#bulkPasteTrayApply').addEventListener('click', () => {
+    let patched = 0;
+    list.querySelectorAll('[data-ch-idx]').forEach(item => {
+      const idx = parseInt(item.dataset.chIdx);
+      const text = item.querySelector('.tray-paste-area').value.trim();
+      if (!text) return;
+      const lines   = text.split('\n').map(l => l.trim()).filter(Boolean);
+      const title   = lines[0] && lines[0].length < 120 ? lines[0] : `Chapter ${idx+1}`;
+      const content = lines.slice(title === lines[0] ? 1 : 0).join('\n\n').trim() || text;
+      resultsRef[idx] = { title, content, url: allUrls[idx], patched: true };
+      patched++;
+    });
+
+    if (patched === 0) {
+      tray.querySelector('#bulkPasteTrayStatus').textContent = '⚠ Nothing pasted yet.';
+      return;
+    }
+
+    // Rebuild bulkChunks in index order from resultsRef
+    bulkChunks = [];
+    bulkCount  = 0;
+    bulkFirstTitle = '';
+    bulkLastTitle  = '';
+    for (let idx = 0; idx < allUrls.length; idx++) {
+      const r = resultsRef[idx];
+      if (!r) continue;
+      const raw = `\n\n${'─'.repeat(60)}\n${r.title}\n${'─'.repeat(60)}\n\n${r.content}`;
+      bulkChunks.push({ title: r.title, content: r.content, raw });
+      bulkCount++;
+      bulkLastTitle = r.title;
+      if (!bulkFirstTitle) bulkFirstTitle = r.title;
+    }
+    updateBulkOutput();
+
+    const stillMissing = allUrls.length - bulkCount +
+      bulkChunks.filter(c => c.content.startsWith('[Chapter')).length;
+    tray.querySelector('#bulkPasteTrayStatus').textContent =
+      `✓ ${patched} chapter${patched===1?'':'s'} applied!` +
+      (stillMissing > 0 ? ` (${stillMissing} still missing)` : ' — all filled!');
+
+    // Re-save history with patched content
+    autoSaveHistory({ type: 'custom', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle,
+      chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
+  });
+
+  tray.querySelector('#bulkPasteTrayDismiss').addEventListener('click', () => tray.remove());
+
+  // Insert after the status bar, before the output textarea
+  statusBulk.insertAdjacentElement('afterend', tray);
+
+  showStatus(statusBulk,
+    `✗ ${count} chapter${count===1?'':'s'} need manual paste — see the tray below.`,
+    'error', true);
 }
 
 function updateBulkOutput() {
