@@ -260,7 +260,45 @@ async function withRetry(fn, { maxAttempts = 4, baseDelay = 1200, onRetry } = {}
   }
   throw lastErr;
 }
-function novelBaseUrl(url) { try { const u = new URL(url); const p = u.pathname.split('/').filter(Boolean); return p.length>=2 ? `${u.origin}/${p[0]}/${p[1]}` : null; } catch { return null; } }
+function novelBaseUrl(url) { try { return toNovelPageUrl(url); } catch { return null; } }
+
+/* ── SUPPORTED SOURCE DOMAINS ──
+   NovelArrow.com is the rebrand of NovelBin.com, but it uses a DIFFERENT
+   URL scheme, not just a different domain:
+     novelbin.com   novel page: /b/<slug>          chapter: /b/<slug>/<chapter>
+     novelarrow.com novel page: /novel/<slug>       chapter: /chapter/<slug>/<chapter>
+   (novelbin.com chapter links now 301-redirect to the equivalent
+   novelarrow.com /chapter/... URL.)
+   Everywhere a chapter link or novel page is identified, both schemes
+   are accepted side-by-side. */
+const ALLOWED_DOMAINS = ['novelbin.com', 'novelarrow.com'];
+function isAllowedUrl(url) { return !!url && ALLOWED_DOMAINS.some(d => url.includes(d)); }
+function originOf(url, fallback = 'https://novelbin.com') { try { return new URL(url).origin; } catch { return fallback; } }
+
+// Matches a chapter link in either scheme: /b/<slug>/<chapter-slug> or /chapter/<slug>/<chapter-slug>
+const CHAPTER_HREF_RE = /\/(?:b|chapter)\/[^/?#]+\/[^/?#]+/;
+
+// Given ANY novel or chapter URL on either site, return the canonical novel page URL.
+function toNovelPageUrl(rawUrl) {
+  let baseUrl = rawUrl.trim().replace(/#.*$/, '');
+  if (!baseUrl.startsWith('http')) baseUrl = 'https://' + baseUrl;
+  try {
+    const u    = new URL(baseUrl);
+    const segs = u.pathname.split('/').filter(Boolean); // e.g. ['b','slug',...] or ['chapter','slug',...]
+    if (segs.length >= 2) {
+      const slug = segs[1];
+      // novelarrow.com chapter pages live under /chapter/, but the novel
+      // page itself is under /novel/ — remap; everything else (novelbin's
+      // /b/, novelarrow's own /novel/) already uses the same segment for
+      // both the novel page and its chapters, so keep it as-is.
+      const novelSeg = segs[0] === 'chapter' ? 'novel' : segs[0];
+      u.pathname = '/' + novelSeg + '/' + slug;
+      u.search   = '';
+      baseUrl    = u.origin + u.pathname;
+    }
+  } catch { /* leave baseUrl as-is */ }
+  return baseUrl;
+}
 
 /* ── TAB SWITCHING ── */
 const allTabs   = [tabSingle, tabBulk, tabUrlExtractor, tabHistory, tabPrint];
@@ -282,7 +320,7 @@ urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadUrl(); })
 function loadUrl() {
   const url = urlInput.value.trim();
   if (!url) return;
-  if (!url.includes('novelbin.com')) { showStatus(statusSingle, '⚠ Must be a novelbin.com URL.', 'error', true); switchTab(tabSingle, panelSingle); return; }
+  if (!isAllowedUrl(url)) { showStatus(statusSingle, '⚠ Must be a novelbin.com or novelarrow.com URL.', 'error', true); switchTab(tabSingle, panelSingle); return; }
   footerText.textContent = `Loaded: ${trunc(url, 55)}`;
   switchTab(tabSingle, panelSingle);
   showStatus(statusSingle, '✓ URL set — click Extract to scrape this chapter.', 'info', true);
@@ -314,7 +352,7 @@ validateUrlsBtn.addEventListener('click', () => {
   if (urls.length === 0) { urlListValidated.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);">No URLs to validate.</div>'; urlListValidated.classList.add('visible'); return; }
   const valid = [], invalid = [];
   const html = urls.map((url, i) => {
-    const ok = url.includes('novelbin.com');
+    const ok = isAllowedUrl(url);
     if (ok) valid.push(url); else invalid.push(url);
     return `<div class="url-validated-item"><span class="url-validated-num">#${i+1}</span><span class="url-validated-url ${ok?'':'url-validated-bad'}">${ok?'✓':'✗'} ${esc(trunc(url,55))}</span></div>`;
   }).join('');
@@ -331,6 +369,12 @@ const CORS_PROXIES = [
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
   u => `https://thingproxy.freeboard.io/fetch/${u}`,
   u => `https://cors-anywhere.herokuapp.com/${u}`,
+  u => `https://proxy.cors.sh/${u}`,
+  u => `https://gobetween.oklabs.org/${u}`,
+  u => `https://test.cors.workers.dev/?${encodeURIComponent(u)}`,
+  u => `https://crossorigin.me/${u}`,
+  u => `https://cors-proxy.htmldriven.com/?url=${encodeURIComponent(u)}`,
+  u => `https://yacdn.org/serve/${u}`,
 ];
 
 // Hard timeout wrapper — prevents a hanging proxy from stalling an entire batch
@@ -382,13 +426,13 @@ function extractFromHtml(html, url) {
   if (!content) return { title, content: '', error: 'No text content found.' };
   return { title, content, error: null };
 }
-function getNextUrlFromHtml(html) {
+function getNextUrlFromHtml(html, baseUrl) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const btn = doc.getElementById('next_chap');
   if (!btn) return { nextUrl: null, isLast: true };
   const href = btn.getAttribute('href') || '';
   if (btn.hasAttribute('disabled') || href.endsWith('/null') || href === '') return { nextUrl: null, isLast: true };
-  try { return { nextUrl: new URL(href, 'https://novelbin.com').href, isLast: false }; } catch { return { nextUrl: href, isLast: false }; }
+  try { return { nextUrl: new URL(href, originOf(baseUrl)).href, isLast: false }; } catch { return { nextUrl: href, isLast: false }; }
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -408,17 +452,18 @@ function getNextUrlFromHtml(html) {
  *     which returns an <option> list or chapter list HTML.
  */
 
-function bueExtractChaptersFromHtml(html, novelSlug) {
+function bueExtractChaptersFromHtml(html, novelSlug, baseUrl) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const chapters = [];
   const seen = new Set();
+  const origin = originOf(baseUrl);
  
   function addLink(a) {
     // Always strip the URL fragment (#...) before processing
     const href = (a.getAttribute('href') || '').split('#')[0].trim();
-    if (!href || !href.includes('/b/') || href.endsWith('/b/') || href === '/b/null' || href.endsWith('/null')) return;
+    if (!href || !CHAPTER_HREF_RE.test(href) || href.endsWith('/null')) return;
     let url;
-    try { url = new URL(href, 'https://novelbin.com').href; } catch { return; }
+    try { url = new URL(href, origin).href; } catch { return; }
     if (seen.has(url)) return;
     seen.add(url);
     // Prefer the title="" attribute; fall back to inner text of .nchr-text / .chapter-title spans
@@ -462,11 +507,11 @@ function bueExtractChaptersFromHtml(html, novelSlug) {
   // ── Method 3: generic slug-pattern fallback ────────────────────────
   if (chapters.length === 0) {
     const slug = novelSlug || '';
-    // Build a pattern that matches /b/<slug>/anything (but not bare /b/<slug>)
+    // Build a pattern that matches /b/<slug>/anything OR /chapter/<slug>/anything
     const escapedSlug = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const pattern = slug
-      ? new RegExp('/b/' + escapedSlug + '/[^#"\'\\s]+')
-      : /\/b\/[^/]+\/[^#"'\s]+/;
+      ? new RegExp('/(?:b|chapter)/' + escapedSlug + '/[^#"\'\\s]+')
+      : /\/(?:b|chapter)\/[^/]+\/[^#"'\s]+/;
     doc.querySelectorAll('a[href]').forEach(a => {
       const href = (a.getAttribute('href') || '').split('#')[0].trim();
       if (!pattern.test(href)) return;
@@ -478,7 +523,7 @@ function bueExtractChaptersFromHtml(html, novelSlug) {
   if (chapters.length === 0) {
     doc.querySelectorAll('option[value]').forEach(opt => {
       const href = (opt.getAttribute('value') || '').split('#')[0].trim();
-      if (!href.includes('/b/')) return;
+      if (!CHAPTER_HREF_RE.test(href)) return;
       const fakeA = document.createElement('a');
       fakeA.href = href;
       fakeA.textContent = opt.textContent.trim();
@@ -512,22 +557,264 @@ function bueSlugFromUrl(url) {
   } catch { return ''; }
 }
 
-async function bueFetchChapterList(rawUrl) {
-  // 1. Always strip the URL fragment — NovelBin renders chapters server-side,
-  //    the #tab-chapters-title fragment is only meaningful in-browser.
-  let baseUrl = rawUrl.trim().replace(/#.*$/, '');
-  if (!baseUrl.startsWith('http')) baseUrl = 'https://' + baseUrl;
- 
-  // 2. Normalise to the canonical novel page: /b/<slug>  (drop /chapter-xxx etc.)
+/* ── NovelArrow API helpers ────────────────────────────────────────────
+   novelarrow.com exposes a clean JSON API:
+     Novel page:  /novel/<slug>
+     Chapter list: /api-web/novels/<slug>/chapters?sort=asc
+     Chapter data: /api-web/novels/<slug>/chapters/<chapter-id>
+   We use it directly instead of HTML-scraping to get a reliable,
+   premium-filtered chapter list.
+─────────────────────────────────────────────────────────────────────── */
+
+function isNovelArrowUrl(url) {
+  try { return new URL(url).hostname.includes('novelarrow.com'); } catch { return false; }
+}
+
+// Extract novel slug from any novelarrow.com URL:
+//   /novel/<slug>  or  /chapter/<slug>/<chapter-id>
+function novelArrowSlug(url) {
   try {
-    const u    = new URL(baseUrl);
-    const segs = u.pathname.split('/').filter(Boolean); // ['b', 'novel-slug', ...]
-    if (segs.length >= 2) {
-      u.pathname = '/' + segs[0] + '/' + segs[1];      // keep only /b/<slug>
-      u.search   = '';
-      baseUrl    = u.origin + u.pathname;
+    const parts = new URL(url).pathname.split('/').filter(Boolean);
+    // parts[0] = 'novel' | 'chapter', parts[1] = slug
+    return parts[1] || '';
+  } catch { return ''; }
+}
+
+/* ── JSON-aware proxy strategies ───────────────────────────────────────
+   Each entry is { makeUrl(url), extract(text) } so we can handle the
+   different response envelopes each proxy wraps around the raw content.
+   allorigins wraps in {"contents":"…","status":{…}} — we unwrap it.
+   The raw-mode proxies (corsproxy.io, etc.) return the body directly.
+─────────────────────────────────────────────────────────────────────── */
+const JSON_PROXY_STRATEGIES = [
+  // allorigins /get — returns JSON envelope: { contents: "...", status: { ... } }
+  {
+    makeUrl: u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+    extract: text => {
+      const envelope = JSON.parse(text);
+      const inner    = envelope.contents ?? envelope;
+      return typeof inner === 'string' ? JSON.parse(inner) : inner;
     }
-  } catch { /* leave baseUrl as-is */ }
+  },
+  // allorigins /raw — returns raw body directly
+  {
+    makeUrl: u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    extract: text => JSON.parse(text)
+  },
+  // corsproxy.io — returns raw body
+  {
+    makeUrl: u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    extract: text => JSON.parse(text)
+  },
+  // thingproxy — returns raw body (100KB limit, fine for chapter API)
+  {
+    makeUrl: u => `https://thingproxy.freeboard.io/fetch/${u}`,
+    extract: text => JSON.parse(text)
+  },
+  // cors-anywhere — returns raw body
+  {
+    makeUrl: u => `https://cors-anywhere.herokuapp.com/${u}`,
+    extract: text => JSON.parse(text)
+  },
+  // cors.sh — returns raw body
+  {
+    makeUrl: u => `https://proxy.cors.sh/${u}`,
+    extract: text => JSON.parse(text)
+  },
+  // Cloudflare cors-anywhere worker — returns raw body
+  {
+    makeUrl: u => `https://test.cors.workers.dev/?${encodeURIComponent(u)}`,
+    extract: text => JSON.parse(text)
+  },
+  // gobetween — returns raw body
+  {
+    makeUrl: u => `https://gobetween.oklabs.org/${u}`,
+    extract: text => JSON.parse(text)
+  },
+  // HTMLDriven — returns raw body
+  {
+    makeUrl: u => `https://cors-proxy.htmldriven.com/?url=${encodeURIComponent(u)}`,
+    extract: text => {
+      // HTMLDriven sometimes wraps in { "header": "...", "body": "..." }
+      try {
+        const j = JSON.parse(text);
+        if (j && typeof j.body === 'string') return JSON.parse(j.body);
+        return j;
+      } catch { return JSON.parse(text); }
+    }
+  },
+  // yacdn — returns raw body
+  {
+    makeUrl: u => `https://yacdn.org/serve/${u}`,
+    extract: text => JSON.parse(text)
+  },
+  // crossorigin.me — returns raw body
+  {
+    makeUrl: u => `https://crossorigin.me/${u}`,
+    extract: text => JSON.parse(text)
+  },
+];
+
+async function fetchJson(url) {
+  // 1. Direct fetch — works when the API sends CORS headers (best case)
+  try {
+    const r = await fetchWithTimeout(url, {
+      credentials: 'omit',
+      cache: 'no-store',
+      headers: { 'Accept': 'application/json' }
+    }, 12000);
+    if (r.ok) {
+      const text = await r.text();
+      // Guard: some proxies return HTML error pages even with 200
+      if (text && (text.trimStart().startsWith('{') || text.trimStart().startsWith('['))) {
+        try { return JSON.parse(text); } catch {}
+      }
+    }
+  } catch {}
+
+  // 2. Try each proxy strategy in shuffled order
+  const strategies = shuffleArray([...JSON_PROXY_STRATEGIES]);
+  let lastErr = 'All proxies failed for JSON fetch';
+  for (const strategy of strategies) {
+    try {
+      const r = await fetchWithTimeout(strategy.makeUrl(url), { cache: 'no-store' }, 16000);
+      if (!r.ok) continue;
+      const text = await r.text();
+      if (!text || text.length < 2) continue;
+      try {
+        const parsed = strategy.extract(text);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch (parseErr) {
+        // This proxy's envelope parse failed — try raw JSON parse as fallback
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed && typeof parsed === 'object') return parsed;
+        } catch {}
+      }
+    } catch (err) {
+      lastErr = err.message || lastErr;
+    }
+  }
+  throw new Error(lastErr);
+}
+
+/**
+ * Fetch ALL free chapters for a novelarrow.com novel via its JSON API.
+ * Only returns chapters where premium_content=false, platinum_content=false, coin_price=0.
+ * Returns { chapters: [{title, url}], novelTitle, slug }
+ */
+async function bueFetchNovelArrowChapters(rawUrl) {
+  const origin = 'https://novelarrow.com';
+  const slug   = novelArrowSlug(rawUrl) || bueSlugFromUrl(rawUrl);
+  if (!slug) throw new Error('Could not extract novel slug from URL.');
+
+  // 1. Fetch chapter list from API
+  const listUrl = `${origin}/api-web/novels/${slug}/chapters?sort=asc`;
+  const listData = await fetchJson(listUrl);
+  const items = listData.items || listData.data || listData.chapters || [];
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error('NovelArrow API returned no chapters.');
+  }
+
+  // 2. Filter to free chapters only
+  const freeItems = items.filter(ch =>
+    ch.premium_content === false &&
+    ch.platinum_content === false &&
+    (ch.coin_price === 0 || ch.coin_price === null || ch.coin_price === undefined)
+  );
+
+  if (freeItems.length === 0) {
+    throw new Error('No free chapters found (all are premium/coin-locked).');
+  }
+
+  // 3. Build chapter URL list — chapter page URL: /chapter/<slug>/<chapter-id>
+  const chapters = freeItems.map(ch => ({
+    title: ch.chapter_name || ch.chapter_id,
+    url:   `${origin}/chapter/${slug}/${ch.chapter_id}`,
+    // Store API URL so single-extract can use JSON content instead of HTML parsing
+    apiUrl: `${origin}/api-web/novels/${slug}/chapters/${ch.chapter_id}`,
+  }));
+
+  // 4. Try to get novel title from first page HTML (best effort)
+  let novelTitle = slug;
+  try {
+    const pageHtml = await fetchPageHtml(`${origin}/novel/${slug}`);
+    const parsed   = new DOMParser().parseFromString(pageHtml, 'text/html');
+    const t = parsed.querySelector('h3.title, h1.title, .book-name, h1');
+    if (t) novelTitle = t.textContent.trim().split('|')[0].trim();
+  } catch { /* non-fatal */ }
+
+  return { chapters, novelTitle, slug };
+}
+
+/**
+ * Fetch a single NovelArrow chapter via its JSON API.
+ * Returns { title, content, error }
+ */
+async function fetchNovelArrowChapter(chapterPageUrl) {
+  // Derive the API URL from the chapter page URL:
+  //   /chapter/<slug>/<chapter-id>  →  /api-web/novels/<slug>/chapters/<chapter-id>
+  try {
+    const u     = new URL(chapterPageUrl);
+    const parts = u.pathname.split('/').filter(Boolean);
+    // parts: ['chapter', slug, chapter-id]
+    if (parts.length >= 3 && parts[0] === 'chapter') {
+      const slug      = parts[1];
+      const chapterId = parts.slice(2).join('/');
+      const apiUrl    = `${u.origin}/api-web/novels/${slug}/chapters/${chapterId}`;
+      const data      = await fetchJson(apiUrl);
+      const info      = data?.item?.chapterInfo || data?.chapterInfo || data?.item || {};
+      const rawHtml   = info.chapter_content || '';
+      const title     = info.chapter_name    || chapterId;
+      if (!rawHtml) return { title, content: '', error: 'Empty chapter content from API.' };
+      // Strip all HTML tags → pure plain text, preserving paragraph breaks
+      const doc  = new DOMParser().parseFromString(rawHtml, 'text/html');
+      // Remove script/style noise first
+      doc.querySelectorAll('script, style, noscript').forEach(el => el.remove());
+      // Walk block-level elements: each <p>, <div>, <br>, <li> becomes a paragraph break
+      // Strategy: replace block tags with newline sentinels before extracting text
+      const BLOCK_TAGS = new Set(['P','DIV','BR','LI','TR','H1','H2','H3','H4','H5','H6','BLOCKQUOTE','HR']);
+      function extractText(node) {
+        let out = '';
+        for (const child of node.childNodes) {
+          if (child.nodeType === Node.TEXT_NODE) {
+            out += child.textContent;
+          } else if (child.nodeType === Node.ELEMENT_NODE) {
+            const inner = extractText(child);
+            out += BLOCK_TAGS.has(child.tagName) ? '\n' + inner + '\n' : inner;
+          }
+        }
+        return out;
+      }
+      const raw = extractText(doc.body)
+        // Collapse 3+ consecutive newlines to exactly two (one blank line between paras)
+        .replace(/\n{3,}/g, '\n\n')
+        // Trim each line
+        .split('\n').map(l => l.trim()).join('\n')
+        // Remove blank lines that are now just whitespace
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      // Decode any remaining HTML entities (&amp; &lt; &gt; &quot; &#39; &#NNN;)
+      const txtArea = document.createElement('textarea');
+      txtArea.innerHTML = raw;
+      const content = txtArea.value.trim();
+      return { title, content, error: content ? null : 'No text extracted from chapter HTML.' };
+    }
+  } catch (e) {
+    return { title: '', content: '', error: e.message };
+  }
+  return { title: '', content: '', error: 'Not a recognised NovelArrow chapter URL.' };
+}
+
+async function bueFetchChapterList(rawUrl) {
+  // ── Fast path: NovelArrow has a clean JSON API — use it directly ──
+  if (isNovelArrowUrl(rawUrl)) {
+    return bueFetchNovelArrowChapters(rawUrl);
+  }
+
+  // 1. Normalise to the canonical novel page (handles both URL schemes,
+  //    strips fragments/chapter segments — see toNovelPageUrl()).
+  const baseUrl = toNovelPageUrl(rawUrl);
  
   const slug = bueSlugFromUrl(baseUrl);
   let results    = [];
@@ -538,25 +825,26 @@ async function bueFetchChapterList(rawUrl) {
   try {
     html       = await fetchPageHtml(baseUrl);
     novelTitle = bueGetNovelTitle(html) || slug;
-    const fromPage = bueExtractChaptersFromHtml(html, slug);
+    const fromPage = bueExtractChaptersFromHtml(html, slug, baseUrl);
     fromPage.forEach(c => results.push(c));
   } catch (e) {
     throw new Error('Failed to fetch novel page: ' + e.message);
   }
  
   // 4. AJAX endpoints for novels with very large chapter counts
-  //    (NovelBin lazy-loads the full list via these endpoints — always try
-  //     in case the inline HTML only has a partial chapter list)
+  //    (NovelBin/NovelArrow lazy-load the full list via these endpoints —
+  //     always try in case the inline HTML only has a partial chapter list)
   const novelId = bueGetNovelId(html);
   if (novelId) {
+    const ajaxOrigin = originOf(baseUrl);
     const ajaxUrls = [
-      `https://novelbin.com/ajax/chapter-option?novelId=${novelId}`,
-      `https://novelbin.com/ajax/chapter-archive?novelId=${novelId}`,
+      `${ajaxOrigin}/ajax/chapter-option?novelId=${novelId}`,
+      `${ajaxOrigin}/ajax/chapter-archive?novelId=${novelId}`,
     ];
     for (const aUrl of ajaxUrls) {
       try {
         const ajaxHtml = await fetchPageHtml(aUrl);
-        const fromAjax = bueExtractChaptersFromHtml(ajaxHtml, slug);
+        const fromAjax = bueExtractChaptersFromHtml(ajaxHtml, slug, baseUrl);
         if (fromAjax.length > results.length) {
           results = fromAjax;
         }
@@ -642,8 +930,8 @@ bueRangeApply.addEventListener('click', () => {
 
 bueFetchBtn.addEventListener('click', async () => {
   const raw = novelPageInput.value.trim();
-  if (!raw || !raw.includes('novelbin.com')) {
-    showStatus(statusBue, '⚠ Enter a valid novelbin.com novel URL.', 'error', true);
+  if (!raw || !isAllowedUrl(raw)) {
+    showStatus(statusBue, '⚠ Enter a valid novelbin.com or novelarrow.com novel URL.', 'error', true);
     return;
   }
   // reset
@@ -662,7 +950,7 @@ bueFetchBtn.addEventListener('click', async () => {
 
     if (chapters.length === 0) {
       showStatus(statusBue,
-        '⚠ No chapters found on that page. NovelBin may require login or load chapters via JavaScript. ' +
+        '⚠ No chapters found on that page. NovelBin/NovelArrow may require login or load chapters via JavaScript. ' +
         'Try pasting the page source using the fallback below.',
         'warn', true);
       document.getElementById('buePastePanel').style.display = 'block';
@@ -704,7 +992,7 @@ document.getElementById('bueExtractPasteBtn').addEventListener('click', () => {
   // Try to extract novel slug from pasted URL input or from HTML itself
   const rawUrl  = novelPageInput.value.trim();
   const slug    = bueSlugFromUrl(rawUrl) || (html.match(/\/b\/([\w-]+)\//) || [])[1] || '';
-  const chapters = bueExtractChaptersFromHtml(html, slug);
+  const chapters = bueExtractChaptersFromHtml(html, slug, rawUrl);
   const novelTitle = bueGetNovelTitle(html) || slug || 'Unknown Novel';
 
   if (chapters.length === 0) {
@@ -777,16 +1065,30 @@ bueResetBtn.addEventListener('click', () => {
 /* ── SINGLE EXTRACT ── */
 extractBtn.addEventListener('click', async () => {
   const url = urlInput.value.trim() || window.location.href;
-  if (!url.includes('novelbin.com')) { showStatus(statusSingle, '⚠ Enter a novelbin.com chapter URL above first.', 'error', true); return; }
+  if (!isAllowedUrl(url)) { showStatus(statusSingle, '⚠ Enter a novelbin.com or novelarrow.com chapter URL above first.', 'error', true); return; }
   statusSingle.style.display = 'none'; loaderSingle.style.display = 'flex'; extractBtn.disabled = true;
   try {
-    const html = await withRetry(
-      () => fetchPageHtml(url),
-      { maxAttempts: 4, onRetry: (attempt, max, err, delay) => {
-        showStatus(statusSingle, `⚠ Attempt ${attempt}/${max} failed — retrying in ${(delay/1000).toFixed(1)}s… (${err.message})`, 'warn', true);
-      }}
-    );
-    const { title, content, error } = extractFromHtml(html, url);
+    let title, content, error;
+
+    // Use NovelArrow JSON API for novelarrow.com chapter pages (/chapter/<slug>/<id>)
+    if (isNovelArrowUrl(url) && new URL(url).pathname.startsWith('/chapter/')) {
+      showStatus(statusSingle, '⚡ Fetching via NovelArrow API…', 'info', true);
+      ({ title, content, error } = await withRetry(
+        () => fetchNovelArrowChapter(url),
+        { maxAttempts: 4, onRetry: (attempt, max, err, delay) => {
+          showStatus(statusSingle, `⚠ Attempt ${attempt}/${max} failed — retrying in ${(delay/1000).toFixed(1)}s… (${err.message})`, 'warn', true);
+        }}
+      ));
+    } else {
+      const html = await withRetry(
+        () => fetchPageHtml(url),
+        { maxAttempts: 4, onRetry: (attempt, max, err, delay) => {
+          showStatus(statusSingle, `⚠ Attempt ${attempt}/${max} failed — retrying in ${(delay/1000).toFixed(1)}s… (${err.message})`, 'warn', true);
+        }}
+      );
+      ({ title, content, error } = extractFromHtml(html, url));
+    }
+
     loaderSingle.style.display = 'none'; extractBtn.disabled = false;
     if (error && !content) { showStatus(statusSingle, '✗ ' + error, 'error', true); return; }
     singleText = content; singleTitle = title; singleUrl = url;
@@ -824,8 +1126,8 @@ bulkStartBtn.addEventListener('click', async () => {
   statusBulk.style.display = 'none'; bulkChapterTitle.textContent = '';
   progressBarFill.style.width = '5%';
   if (bulkMode === 'custom') {
-    const rawUrls = parseUrlList(urlListInput.value).filter(u => u.includes('novelbin.com'));
-    if (rawUrls.length === 0) { showStatus(statusBulk, '⚠ No valid novelbin.com URLs in list. Paste URLs and validate first.', 'error', true); return; }
+    const rawUrls = parseUrlList(urlListInput.value).filter(u => isAllowedUrl(u));
+    if (rawUrls.length === 0) { showStatus(statusBulk, '⚠ No valid novelbin.com or novelarrow.com URLs in list. Paste URLs and validate first.', 'error', true); return; }
     customUrlList = rawUrls; bulkStartUrl = rawUrls[0];
     const batchSz = rawUrls.length > 100 ? 8 : rawUrls.length > 30 ? 5 : 3;
     progressCurrent.textContent = `0 / ${rawUrls.length} chapters…`;
@@ -838,7 +1140,7 @@ bulkStartBtn.addEventListener('click', async () => {
     runCustomUrlLoop(rawUrls);
   } else {
     const url = urlInput.value.trim();
-    if (!url || !url.includes('novelbin.com')) { showStatus(statusBulk, '⚠ Enter a novelbin.com chapter URL above first.', 'error', true); return; }
+    if (!url || !isAllowedUrl(url)) { showStatus(statusBulk, '⚠ Enter a novelbin.com or novelarrow.com chapter URL above first.', 'error', true); return; }
     bulkStartUrl = url; progressCurrent.textContent = 'Fetching first chapter…';
     canvasIndicatorText.textContent = '0 chapters scraped';
     setBulkUI(true); showStatus(statusBulk, '🚀 Scraping via hidden canvas — no tab opened!', 'warn', true);
@@ -864,7 +1166,7 @@ async function runBulkLoop(startUrl) {
       if (error && !content) {
         // Content parse error on a fetched page — skip this chapter and try next
         showStatus(statusBulk, `⚠ Parse error on "${trunc(currentUrl,35)}", skipping: ${error}`, 'warn', true);
-        const nav = getNextUrlFromHtml(html);
+        const nav = getNextUrlFromHtml(html, currentUrl);
         if (nav.isLast || !nav.nextUrl) { finishBulk('continuous'); break; }
         currentUrl = nav.nextUrl; await sleep(800); continue;
       }
@@ -875,7 +1177,7 @@ async function runBulkLoop(startUrl) {
       chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount === 1 ? '' : 's');
       bulkChapterTitle.textContent = title; canvasIndicatorText.textContent = `${bulkCount} chapter${bulkCount===1?'':'s'} scraped`;
       recordChapterDone(bulkCount);
-      const nav = getNextUrlFromHtml(html);
+      const nav = getNextUrlFromHtml(html, currentUrl);
       if (nav.isLast || !nav.nextUrl) { finishBulk('continuous'); break; }
       currentUrl = nav.nextUrl; await sleep(800);
     } catch(err) {
@@ -952,6 +1254,30 @@ async function runCustomUrlLoop(urls) {
   async function fetchOne(i, isRetry = false) {
     if (bulkStopped) return;
     const url = urls[i];
+
+    // Use NovelArrow JSON API for novelarrow.com chapter pages
+    if (isNovelArrowUrl(url) && (() => { try { return new URL(url).pathname.startsWith('/chapter/'); } catch { return false; } })()) {
+      try {
+        const { title, content, error } = await withRetry(
+          () => fetchNovelArrowChapter(url),
+          {
+            maxAttempts: isRetry ? 6 : 4,
+            baseDelay:   isRetry ? 3000 : 1200,
+            onRetry: (attempt, max, err, delay) => {
+              canvasIndicatorText.textContent =
+                `Ch ${i+1}${isRetry?' (retry pass)':''}: attempt ${attempt}/${max}…`;
+            }
+          }
+        );
+        if (error && !content) { results[i] = { skipped: true, url, reason: error }; if (!isRetry) failedIdxs.push(i); return; }
+        results[i] = { title, content, url };
+      } catch(err) {
+        results[i] = { skipped: true, url, reason: err.message };
+        if (!isRetry) failedIdxs.push(i);
+      }
+      return;
+    }
+
     let html;
     try {
       html = await withRetry(
@@ -1282,4 +1608,4 @@ doPrintBtn.addEventListener('click', () => {
 
 /* ── INIT ── */
 loadPrintConfig(); renderExtracts();
-try { if (window.location.href.includes('novelbin.com')) urlInput.value = window.location.href; } catch {}
+try { if (isAllowedUrl(window.location.href)) urlInput.value = window.location.href; } catch {}
