@@ -2222,7 +2222,8 @@ try { if (isAllowedUrl(window.location.href)) urlInput.value = window.location.h
           // If the account was suspended or blocked, sign them out immediately
           if (currentUserData.status === 'suspended' || currentUserData.status === 'blocked') {
             await F.signOut(auth);
-            showLoginError(`Your account has been ${currentUserData.status}. Contact the admin.`);\n            loginScreen.style.display = 'flex';
+            showLoginError(`Your account has been ${currentUserData.status}. Contact the admin.`);
+            loginScreen.style.display = 'flex';
             return;
           }
 
@@ -3135,12 +3136,14 @@ try { if (isAllowedUrl(window.location.href)) urlInput.value = window.location.h
 
   if (showRegisterBtn) showRegisterBtn.addEventListener('click', () => {
     if (registerForm) registerForm.style.display = 'block';
-    if (showRegisterBtn.parentElement) showRegisterBtn.parentElement.style.display = 'none';
+    const row = document.getElementById('noAccountRow');
+    if (row) row.style.display = 'none';
     hideLoginError();
   });
   if (hideRegisterBtn) hideRegisterBtn.addEventListener('click', () => {
     if (registerForm) registerForm.style.display = 'none';
-    if (showRegisterBtn && showRegisterBtn.parentElement) showRegisterBtn.parentElement.style.display = 'block';
+    const row = document.getElementById('noAccountRow');
+    if (row) row.style.display = '';
     hideRegErr();
   });
 
