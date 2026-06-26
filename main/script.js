@@ -3135,36 +3135,43 @@ try { if (isAllowedUrl(window.location.href)) urlInput.value = window.location.h
   function hideRegErr()    { if (registerError) registerError.style.display = 'none'; }
 
   if (showRegisterBtn) showRegisterBtn.addEventListener('click', () => {
+    const loginFields = document.getElementById('loginFields');
+    if (loginFields) loginFields.style.display = 'none';
     if (registerForm) registerForm.style.display = 'block';
-    const row = document.getElementById('noAccountRow');
-    if (row) row.style.display = 'none';
     hideLoginError();
   });
   if (hideRegisterBtn) hideRegisterBtn.addEventListener('click', () => {
     if (registerForm) registerForm.style.display = 'none';
-    const row = document.getElementById('noAccountRow');
-    if (row) row.style.display = '';
+    const loginFields = document.getElementById('loginFields');
+    if (loginFields) loginFields.style.display = '';
     hideRegErr();
   });
 
   if (registerBtn) {
     registerBtn.addEventListener('click', async () => {
-      const name  = registerName  ? registerName.value.trim()   : '';
-      const email = registerEmail2 ? registerEmail2.value.trim() : '';
-      const pass  = registerPass2  ? registerPass2.value         : '';
+      const username = registerName   ? registerName.value.trim().replace(/^@/, '')  : '';
+      const email    = registerEmail2 ? registerEmail2.value.trim() : '';
+      const pass     = registerPass2  ? registerPass2.value         : '';
       hideRegErr();
+      if (!username)      { showRegErr('Username is required.'); return; }
+      if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) { showRegErr('Username: 3–20 chars, letters/numbers/underscores only.'); return; }
       if (!email)         { showRegErr('Email is required.'); return; }
       if (pass.length < 8){ showRegErr('Password must be at least 8 characters.'); return; }
       registerBtn.disabled = true;
       if (registerSpinner) registerSpinner.style.display = 'block';
       try {
+        // Check username not already taken
+        const uq = F.query(F.collection(db,'users'), F.where('username','==', username.toLowerCase()));
+        const usnap = await F.getDocs(uq);
+        if (!usnap.empty) { showRegErr('That username is already taken.'); registerBtn.disabled = false; if (registerSpinner) registerSpinner.style.display = 'none'; return; }
+
         const { createUserWithEmailAndPassword: _cuw } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
         const cred   = await _cuw(auth, email, pass);
         const newUid = cred.user.uid;
         const allSnap = await F.getDocs(F.collection(db,'users'));
         const role    = allSnap.empty ? 'admin' : 'normal';
         await F.setDoc(F.doc(db,'users',newUid), {
-          displayName: name, username: '', email,
+          displayName: username, username: username.toLowerCase(), email,
           role, status: 'active', createdAt: F.serverTimestamp()
         });
         // onAuthStateChanged takes over
