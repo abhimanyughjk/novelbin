@@ -9,11 +9,320 @@
   <style id="printStyles">
     /* Printing handled via window.open — no @media print rules needed */
   </style>
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, addDoc, deleteDoc, serverTimestamp, query, orderBy, writeBatch, where, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth as _getAuth, createUserWithEmailAndPassword, deleteUser as _deleteUser } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey:            "AIzaSyCMKo1DYMn-iperx-JzWSkiKcL2Sb3oQDo",
+      authDomain:        "novelbin-e63ab.firebaseapp.com",
+      databaseURL:       "https://novelbin-e63ab-default-rtdb.firebaseio.com",
+      projectId:         "novelbin-e63ab",
+      storageBucket:     "novelbin-e63ab.firebasestorage.app",
+      messagingSenderId: "685538989195",
+      appId:             "1:685538989195:web:77657f4d3920f47b8e708e"
+    };
+
+    const app  = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    // Expose to global scope for script.js
+    window._fbAuth = auth;
+    window._fbDb   = db;
+    window._fbFns  = { signInWithEmailAndPassword, signOut, onAuthStateChanged,
+                       updatePassword, EmailAuthProvider, reauthenticateWithCredential,
+                       doc, getDoc, setDoc, updateDoc, collection, getDocs,
+                       addDoc, deleteDoc, serverTimestamp, query, orderBy, writeBatch,
+                       createUserWithEmailAndPassword, where, arrayUnion };
+  </script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
 <iframe id="scrapeFrame" style="position:fixed;top:-9999px;left:-9999px;width:1200px;height:900px;border:none;visibility:hidden;pointer-events:none;z-index:-1;" sandbox="allow-same-origin allow-scripts" referrerpolicy="no-referrer"></iframe>
+
+<!-- ── LOGIN SCREEN ── -->
+<div id="loginScreen">
+  <div id="loginCard">
+    <div id="loginLogo">N</div>
+    <div id="loginTitle">NovelBin Extractor</div>
+    <div id="loginSub" style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:24px;">SECURE ACCESS — SIGN IN TO CONTINUE</div>
+    <div id="loginError" style="display:none;background:rgba(255,69,96,.1);border:1px solid rgba(255,69,96,.3);border-radius:6px;padding:8px 12px;font-family:var(--mono);font-size:11px;color:var(--error);margin-bottom:14px;"></div>
+    <div class="login-field">
+      <label class="login-label">EMAIL</label>
+      <input id="loginEmail" type="email" class="login-input" placeholder="your@email.com" autocomplete="email" />
+    </div>
+    <div class="login-field">
+      <label class="login-label">PASSWORD</label>
+      <input id="loginPass" type="password" class="login-input" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <button id="loginBtn" class="login-submit">&#x26A1; Sign In</button>
+    <div id="loginSpinner" style="display:none;text-align:center;font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:10px;">AUTHENTICATING...</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:14px;">
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+      <span style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;">OR</span>
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+    </div>
+    <button id="guestLoginBtn" style="width:100%;margin-top:12px;padding:10px;background:rgba(107,115,148,.08);border:1px solid rgba(107,115,148,.3);border-radius:8px;color:var(--muted);font-family:var(--ff);font-size:13px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .2s;">&#128100; Continue as Guest</button>
+    <div style="margin-top:12px;text-align:center;">
+      <span style="font-family:var(--mono);font-size:10px;color:var(--muted);">No account? </span>
+      <button id="showRegisterBtn" style="background:none;border:none;font-family:var(--mono);font-size:10px;color:var(--accent);cursor:pointer;padding:0;text-decoration:underline;">Register here</button>
+    </div>
+    <div id="registerForm" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--accent4);letter-spacing:1px;margin-bottom:12px;text-align:center;">CREATE ACCOUNT</div>
+      <div id="registerError" style="display:none;background:rgba(255,69,96,.1);border:1px solid rgba(255,69,96,.3);border-radius:6px;padding:8px 12px;font-family:var(--mono);font-size:11px;color:var(--error);margin-bottom:10px;"></div>
+      <div class="login-field">
+        <label class="login-label">DISPLAY NAME</label>
+        <input id="registerName" type="text" class="login-input" placeholder="Your Name" autocomplete="name" />
+      </div>
+      <div class="login-field">
+        <label class="login-label">EMAIL</label>
+        <input id="registerEmail" type="email" class="login-input" placeholder="your@email.com" autocomplete="email" />
+      </div>
+      <div class="login-field">
+        <label class="login-label">PASSWORD</label>
+        <input id="registerPass" type="password" class="login-input" placeholder="Min 8 characters" autocomplete="new-password" />
+      </div>
+      <button id="registerBtn" class="login-submit" style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(124,58,237,.12));border:1px solid var(--accent4);color:var(--accent4);">&#10024; Create Account</button>
+      <div id="registerSpinner" style="display:none;text-align:center;font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:10px;">CREATING ACCOUNT...</div>
+      <button id="hideRegisterBtn" style="background:none;border:none;font-family:var(--mono);font-size:10px;color:var(--muted);cursor:pointer;width:100%;margin-top:10px;text-decoration:underline;">&larr; Back to Sign In</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── USER PANEL (slide-in from left) ── -->
+<div id="userOverlay" style="display:none;position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,.5);backdrop-filter:blur(3px);"></div>
+<div id="userPanel">
+  <!-- Header -->
+  <div id="userPanelHeader">
+    <div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:1.5px;margin-bottom:2px;">LOGGED IN AS</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div id="upDisplayName" style="font-size:15px;font-weight:700;color:#fff;"></div>
+        <span id="upRoleBadge" style="font-family:var(--mono);font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:3px;border:1px solid;display:none;"></span>
+      </div>
+      <div id="upEmail" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:1px;"></div>
+    </div>
+    <button id="userPanelClose" class="up-close-btn">✕</button>
+  </div>
+
+  <!-- Sub-tabs -->
+  <div id="upTabs">
+    <button class="up-tab active" data-tab="novels">📚 Novels</button>
+    <button class="up-tab" data-tab="settings">⚙ Settings</button>
+    <button class="up-tab" data-tab="reports" id="upReportsTab" style="display:none;">📋 Reports</button>
+    <button class="up-tab" data-tab="admin" id="upAdminTab" style="display:none;">👑 Admin</button>
+  </div>
+
+  <!-- ── NOVELS TAB ── -->
+  <div id="upNovelsTab" class="up-tab-content active">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--accent4);letter-spacing:1px;">NOVEL TRACKER</div>
+      <button id="upAddNovelBtn" class="up-action-btn add">＋ Add Novel</button>
+    </div>
+
+    <!-- Add novel form (hidden by default) -->
+    <div id="upAddNovelForm" style="display:none;border:1px solid rgba(0,229,255,.2);border-radius:8px;padding:12px;margin-bottom:12px;background:rgba(0,229,255,.03);">
+      <div class="up-form-row">
+        <label class="up-form-label">Novel Name</label>
+        <input id="upNewNovelName" type="text" class="up-form-input" placeholder="e.g. Age of Wizards" />
+      </div>
+      <div class="up-form-row">
+        <label class="up-form-label">Novel URL</label>
+        <input id="upNewNovelUrl" type="url" class="up-form-input" placeholder="https://novelarrow.com/novel/..." />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="up-form-row">
+          <label class="up-form-label">Ch. Extracted</label>
+          <input id="upNewNovelExtracted" type="number" class="up-form-input" placeholder="0" min="0" />
+        </div>
+        <div class="up-form-row">
+          <label class="up-form-label">Ch. Printed</label>
+          <input id="upNewNovelPrinted" type="number" class="up-form-input" placeholder="0" min="0" />
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button id="upSaveNovelBtn" class="up-action-btn save">💾 Save</button>
+        <button id="upCancelNovelBtn" class="up-action-btn cancel">✕ Cancel</button>
+      </div>
+    </div>
+
+    <div id="upNovelsList" style="display:flex;flex-direction:column;gap:8px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;padding:20px 0;" id="upNovelsEmpty">No novels tracked yet. Add one above.</div>
+    </div>
+  </div>
+
+  <!-- ── SETTINGS TAB ── -->
+  <div id="upSettingsTab" class="up-tab-content" style="display:none;">
+    <div style="font-family:var(--mono);font-size:10px;color:var(--accent4);letter-spacing:1px;margin-bottom:14px;">ACCOUNT SETTINGS</div>
+
+    <div id="upSettingsMsg" style="display:none;border-radius:6px;padding:8px 12px;font-family:var(--mono);font-size:11px;margin-bottom:12px;"></div>
+
+    <div style="border:1px solid var(--border);border-radius:9px;padding:14px;background:var(--surface2);margin-bottom:12px;">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:1px;margin-bottom:10px;">PROFILE</div>
+      <div class="up-form-row">
+        <label class="up-form-label">Display Name</label>
+        <input id="upSettingName" type="text" class="up-form-input" placeholder="Your Name" />
+      </div>
+      <div class="up-form-row">
+        <label class="up-form-label">Username</label>
+        <input id="upSettingUsername" type="text" class="up-form-input" placeholder="@username" />
+      </div>
+      <button id="upSaveProfileBtn" class="up-action-btn save" style="width:100%;margin-top:4px;">💾 Save Profile</button>
+    </div>
+
+    <div style="border:1px solid var(--border);border-radius:9px;padding:14px;background:var(--surface2);">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:1px;margin-bottom:10px;">CHANGE PASSWORD</div>
+      <div class="up-form-row">
+        <label class="up-form-label">Current Password</label>
+        <input id="upCurrentPass" type="password" class="up-form-input" placeholder="••••••••" />
+      </div>
+      <div class="up-form-row">
+        <label class="up-form-label">New Password</label>
+        <input id="upNewPass" type="password" class="up-form-input" placeholder="••••••••" />
+      </div>
+      <div class="up-form-row">
+        <label class="up-form-label">Confirm New</label>
+        <input id="upConfirmPass" type="password" class="up-form-input" placeholder="••••••••" />
+      </div>
+      <button id="upChangePassBtn" class="up-action-btn save" style="width:100%;margin-top:4px;">🔒 Change Password</button>
+    </div>
+  </div>
+
+  <!-- ── REPORTS TAB ── -->
+  <div id="upReportsTabContent" class="up-tab-content" style="display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--accent4);letter-spacing:1px;">📋 TASK REPORTS</div>
+      <button id="upNewReportBtn" class="up-action-btn add" style="padding:4px 10px;font-size:10px;">＋ New Task</button>
+    </div>
+
+    <!-- Active Task Banner (shown when a task is running) -->
+    <div id="upActiveTaskBanner" style="display:none;border:1px solid rgba(0,229,255,.25);border-radius:9px;padding:12px;background:rgba(0,229,255,.04);margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);animation:taskPulse 1.4s ease-in-out infinite;"></div>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:1px;">TASK RUNNING</span>
+        </div>
+        <span id="upTaskElapsed" style="font-family:var(--mono);font-size:10px;color:var(--muted);">0:00</span>
+      </div>
+      <div id="upActiveTaskName" style="font-size:13px;font-weight:700;color:#fff;margin-bottom:6px;"></div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:8px;">Activity log (auto-recorded)</div>
+      <div id="upTaskActivityLog" style="background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:8px;max-height:100px;overflow-y:auto;font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1.8;"></div>
+      <div style="margin-top:10px;">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:4px;">NOTES / SUMMARY</div>
+        <textarea id="upTaskNotes" placeholder="Add notes, observations, or a summary…" style="width:100%;min-height:56px;resize:vertical;background:var(--surface3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:10px;padding:7px 9px;outline:none;box-sizing:border-box;"></textarea>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+        <button id="upFinishTaskBtn" class="up-action-btn save" style="flex:1;padding:6px 8px;font-size:10px;">✓ Finish Task</button>
+        <button id="upCancelTaskBtn" class="up-action-btn cancel" style="padding:6px 10px;font-size:10px;">✕ Discard</button>
+      </div>
+    </div>
+
+    <!-- New Task Form -->
+    <div id="upNewTaskForm" style="display:none;border:1px solid rgba(0,229,255,.18);border-radius:9px;padding:12px;background:rgba(0,229,255,.03);margin-bottom:12px;">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:1px;margin-bottom:8px;">START NEW TASK</div>
+      <div class="up-form-row">
+        <label class="up-form-label">Task Name</label>
+        <input id="upTaskNameInput" type="text" class="up-form-input" placeholder="e.g. Bulk extraction — Overlord vol.1-5" />
+      </div>
+      <div class="up-form-row">
+        <label class="up-form-label">Description (optional)</label>
+        <input id="upTaskDescInput" type="text" class="up-form-input" placeholder="What are you doing?" />
+      </div>
+      <div style="display:flex;gap:6px;margin-top:4px;">
+        <button id="upStartTaskBtn" class="up-action-btn save" style="flex:1;">&#x25B6; Start Task</button>
+        <button id="upCancelNewTaskBtn" class="up-action-btn cancel">✕</button>
+      </div>
+    </div>
+
+    <!-- Completed (unreported) tasks -->
+    <div id="upCompletedTasksSection" style="display:none;margin-bottom:12px;">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent4);letter-spacing:1px;margin-bottom:6px;">COMPLETED — AWAITING REPORT</div>
+      <div id="upCompletedTasksList" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+
+    <!-- Reported tasks list -->
+    <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:6px;" id="upMyReportsLabel">MY SUBMITTED REPORTS</div>
+    <div id="upMyReportsList" style="display:flex;flex-direction:column;gap:6px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;padding:16px 0;" id="upMyReportsEmpty">No reports submitted yet.</div>
+    </div>
+  </div>
+
+  <!-- ── ADMIN TAB ── -->
+  <div id="upAdminTabContent" class="up-tab-content" style="display:none;">
+    <div style="font-family:var(--mono);font-size:10px;color:#f59e0b;letter-spacing:1px;margin-bottom:12px;">👑 USER MANAGEMENT</div>
+
+    <!-- Create User -->
+    <div style="border:1px solid rgba(245,158,11,.25);border-radius:9px;padding:13px;background:rgba(245,158,11,.04);margin-bottom:14px;">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent4);letter-spacing:1px;margin-bottom:10px;">CREATE NEW USER</div>
+      <div id="upCreateUserMsg" style="display:none;border-radius:5px;padding:7px 10px;font-family:var(--mono);font-size:10px;margin-bottom:8px;"></div>
+      <div class="up-form-row">
+        <label class="up-form-label">Display Name</label>
+        <input id="adminNewName" type="text" class="up-form-input" placeholder="John Doe" />
+      </div>
+      <div class="up-form-row">
+        <label class="up-form-label">Username</label>
+        <input id="adminNewUsername" type="text" class="up-form-input" placeholder="@johndoe" />
+      </div>
+      <div class="up-form-row">
+        <label class="up-form-label">Email</label>
+        <input id="adminNewEmail" type="email" class="up-form-input" placeholder="user@email.com" />
+      </div>
+      <div class="up-form-row">
+        <label class="up-form-label">Password</label>
+        <div style="position:relative;">
+          <input id="adminNewPass" type="password" class="up-form-input" placeholder="Min 8 characters" style="width:100%;padding-right:36px;" />
+          <button id="adminPassToggle" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;">👁</button>
+        </div>
+      </div>
+      <div class="up-form-row">
+        <label class="up-form-label">Role</label>
+        <select id="adminNewRole" class="up-form-input">
+          <option value="normal">Normal User</option>
+          <option value="guest">Guest</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <button id="adminCreateUserBtn" class="up-action-btn save" style="width:100%;">＋ Create User</button>
+    </div>
+
+    <!-- User List -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent4);letter-spacing:1px;">ALL USERS</div>
+      <button id="adminRefreshUsersBtn" class="up-action-btn add" style="padding:4px 10px;font-size:10px;">↻ Refresh</button>
+    </div>
+    <div id="adminUsersList" style="display:flex;flex-direction:column;gap:8px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;padding:16px 0;">Loading users…</div>
+    </div>
+    <!-- Reports Section -->
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(245,158,11,.15);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--accent4);letter-spacing:1px;">📋 ALL USER REPORTS</div>
+        <button id="adminRefreshReportsBtn" class="up-action-btn add" style="padding:4px 10px;font-size:10px;">↻ Refresh</button>
+      </div>
+      <div id="adminReportFilterBar" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+        <input id="adminReportSearch" type="text" class="up-form-input" placeholder="Search by user, task…" style="flex:1;padding:5px 8px;font-size:10px;" />
+        <select id="adminReportSort" class="up-form-input" style="padding:5px 6px;font-size:10px;flex-shrink:0;">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="duration">Longest task</option>
+        </select>
+      </div>
+      <div id="adminReportsList" style="display:flex;flex-direction:column;gap:8px;">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;padding:16px 0;">Click Refresh to load reports.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div id="userPanelFooter">
+    <button id="upSignOutBtn" class="up-action-btn signout">⏻ Sign Out</button>
+  </div>
+</div>
 
 <div id="appHeader">
   <div class="logo-mark">N</div>
@@ -22,6 +331,7 @@
     <p>novelbin.com + novelarrow.com // chapter ripper — web edition</p>
   </div>
   <button class="ver-badge" id="verBadgeBtn" title="View changelog">v9.6 ▾</button>
+  <button id="userAvatarBtn" title="Account" style="display:none;margin-left:8px;width:32px;height:32px;border-radius:50%;border:2px solid var(--accent2);background:rgba(124,58,237,.2);color:var(--text);font-family:var(--mono);font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;">?</button>
 </div>
 <div class="scanline"></div>
 
