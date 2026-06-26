@@ -21,7 +21,7 @@
     <h1>NovelBin Extractor</h1>
     <p>novelbin.com + novelarrow.com // chapter ripper — web edition</p>
   </div>
-  <span class="ver-badge">v9.6</span>
+  <button class="ver-badge" id="verBadgeBtn" title="View changelog">v9.6 ▾</button>
 </div>
 <div class="scanline"></div>
 
@@ -348,6 +348,146 @@
     <div class="modal-actions">
       <button class="modal-btn modal-btn-skip" id="pasteModalSkip">Skip chapter</button>
       <button class="modal-btn modal-btn-use" id="pasteModalUse">Use pasted text</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── VERSION CHANGELOG PANEL ── -->
+<div id="verOverlay" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);" ></div>
+<div id="verPanel" style="
+  display:none;position:fixed;top:0;right:0;z-index:9999;
+  width:360px;max-width:100vw;height:100vh;overflow-y:auto;
+  background:var(--surface);border-left:1px solid var(--border);
+  box-shadow:-12px 0 40px rgba(0,0,0,.5);
+  font-family:var(--ff);
+  transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);
+">
+  <div style="position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:1px solid var(--border);padding:16px 18px 12px;display:flex;align-items:center;gap:10px;">
+    <div style="flex:1;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:1.5px;margin-bottom:2px;">CHANGELOG</div>
+      <div style="font-size:15px;font-weight:700;color:#fff;letter-spacing:.5px;">NovelBin Extractor</div>
+    </div>
+    <button id="verPanelClose" style="background:var(--surface3);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px;padding:4px 10px;cursor:pointer;font-family:var(--ff);">✕</button>
+  </div>
+
+  <div style="padding:16px 18px;display:flex;flex-direction:column;gap:20px;">
+
+    <!-- v9.6 -->
+    <div class="ver-entry">
+      <div class="ver-entry-header">
+        <span class="ver-tag current">v9.6</span>
+        <span class="ver-entry-label">Current</span>
+      </div>
+      <div class="ver-entry-date">Jun 2025</div>
+      <ul class="ver-list">
+        <li class="new">NovelArrow "Till Latest" mode now uses JSON API — no more 0-chapter results</li>
+        <li class="new">Retry pass for bulk failures now runs in parallel batches (4x faster)</li>
+        <li class="new">Batch manual-paste tray — all failed chapters shown at once, no blocking modals</li>
+        <li class="new">JSON paste fallback for NovelArrow chapter list API response</li>
+        <li class="fix">allorigins envelope auto-unwrapped in JSON paste (double-parse)</li>
+        <li class="fix">Paste fallback panel now auto-switches to JSON tab for novelarrow.com URLs</li>
+        <li class="fix">Hint URL pre-filled with correct novel slug when panel opens</li>
+      </ul>
+    </div>
+
+    <!-- v9.5 -->
+    <div class="ver-entry">
+      <div class="ver-entry-header">
+        <span class="ver-tag">v9.5</span>
+      </div>
+      <div class="ver-entry-date">May 2025</div>
+      <ul class="ver-list">
+        <li class="new">Paste fallback split into tabbed HTML / JSON panes</li>
+        <li class="new">NovelArrow JSON API paste: parse chapters list directly from API response</li>
+        <li class="new">Free-chapter filter (premium_content / platinum_content / coin_price) in paste path</li>
+        <li class="fix">bueShowPastePanel() replaces bare display toggle — auto-selects correct tab</li>
+      </ul>
+    </div>
+
+    <!-- v9.4 -->
+    <div class="ver-entry">
+      <div class="ver-entry-header">
+        <span class="ver-tag">v9.4</span>
+      </div>
+      <div class="ver-entry-date">Apr 2025</div>
+      <ul class="ver-list">
+        <li class="new">Manual paste modal for chapters that fail all proxy attempts</li>
+        <li class="new">Placeholder insertion with chapter URL for skipped chapters</li>
+        <li class="new">Custom URL loop: parallel batches (3–8 depending on list size)</li>
+        <li class="fix">Order-preserved parallel fetching with per-index result slots</li>
+        <li class="fix">Stopped state saves partial history before exit</li>
+      </ul>
+    </div>
+
+    <!-- v9.3 -->
+    <div class="ver-entry">
+      <div class="ver-entry-header">
+        <span class="ver-tag">v9.3</span>
+      </div>
+      <div class="ver-entry-date">Mar 2025</div>
+      <ul class="ver-list">
+        <li class="new">NovelArrow full JSON API integration (chapter list + chapter content)</li>
+        <li class="new">fetchNovelArrowChapter — HTML-tag-stripping plain-text extraction</li>
+        <li class="new">10+ CORS proxy strategies with parallel race, first-valid-wins</li>
+        <li class="fix">Premium/coin-locked chapter filtering in URL extractor</li>
+        <li class="fix">Novel slug extraction from /novel/ and /chapter/ URL patterns</li>
+      </ul>
+    </div>
+
+    <!-- v9.2 -->
+    <div class="ver-entry">
+      <div class="ver-entry-header">
+        <span class="ver-tag">v9.2</span>
+      </div>
+      <div class="ver-entry-date">Feb 2025</div>
+      <ul class="ver-list">
+        <li class="new">URL Extractor tab — fetch all chapter URLs for any novel</li>
+        <li class="new">Chapter range selector (from / to) with quick-select buttons</li>
+        <li class="new">Send selected chapters to Bulk scraper in one click</li>
+        <li class="fix">NovelBin AJAX endpoints for large chapter counts</li>
+        <li class="fix">Bulk output word/char count live update</li>
+      </ul>
+    </div>
+
+    <!-- v9.1 -->
+    <div class="ver-entry">
+      <div class="ver-entry-header">
+        <span class="ver-tag">v9.1</span>
+      </div>
+      <div class="ver-entry-date">Jan 2025</div>
+      <ul class="ver-list">
+        <li class="new">Print tab with font size, line height, font family controls</li>
+        <li class="new">Two-column layout toggle for paper-saving print</li>
+        <li class="new">Chapter dividers and title visibility toggles</li>
+        <li class="fix">Print preview now generates from saved history entries</li>
+      </ul>
+    </div>
+
+    <!-- v9.0 -->
+    <div class="ver-entry">
+      <div class="ver-entry-header">
+        <span class="ver-tag">v9.0</span>
+      </div>
+      <div class="ver-entry-date">Dec 2024</div>
+      <ul class="ver-list">
+        <li class="new">Full rewrite — dark cyberpunk UI with CSS variables</li>
+        <li class="new">5-tab layout: Current · Bulk · URL Extractor · History · Print</li>
+        <li class="new">History tab: last 30 extracts with word counts and restore</li>
+        <li class="new">withRetry() — exponential backoff across all fetch operations</li>
+        <li class="new">Bulk scrape "Till Latest" continuous mode</li>
+        <li class="new">Bulk scrape "Custom URL List" mode with validation</li>
+        <li class="fix">Proxy race replaces sequential proxy fallback</li>
+      </ul>
+    </div>
+
+  </div><!-- /entries -->
+
+  <div style="padding:12px 18px 20px;border-top:1px solid var(--border);margin-top:4px;">
+    <div style="font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1.7;">
+      NovelBin / NovelArrow Chapter Extractor<br>
+      Supports novelbin.com · novelarrow.com<br>
+      <span style="color:var(--accent2);">github.com/you/novelbin-extractor</span>
     </div>
   </div>
 </div>
