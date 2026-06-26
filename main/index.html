@@ -50,33 +50,39 @@
     <div id="loginLogo">N</div>
     <div id="loginTitle">NovelBin Extractor</div>
     <div id="loginSub" style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:24px;">SECURE ACCESS — SIGN IN TO CONTINUE</div>
-    <div id="loginError" style="display:none;background:rgba(255,69,96,.1);border:1px solid rgba(255,69,96,.3);border-radius:6px;padding:8px 12px;font-family:var(--mono);font-size:11px;color:var(--error);margin-bottom:14px;"></div>
-    <div class="login-field">
-      <label class="login-label">EMAIL OR USERNAME</label>
-      <input id="loginEmail" type="text" class="login-input" placeholder="your@email.com or @username" autocomplete="username" />
+
+    <!-- ── SIGN IN FIELDS ── -->
+    <div id="loginFields">
+      <div id="loginError" style="display:none;background:rgba(255,69,96,.1);border:1px solid rgba(255,69,96,.3);border-radius:6px;padding:8px 12px;font-family:var(--mono);font-size:11px;color:var(--error);margin-bottom:14px;"></div>
+      <div class="login-field">
+        <label class="login-label">EMAIL OR USERNAME</label>
+        <input id="loginEmail" type="text" class="login-input" placeholder="your@email.com or @username" autocomplete="username" />
+      </div>
+      <div class="login-field">
+        <label class="login-label">PASSWORD</label>
+        <input id="loginPass" type="password" class="login-input" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+      <button id="loginBtn" class="login-submit">&#x26A1; Sign In</button>
+      <div id="loginSpinner" style="display:none;text-align:center;font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:10px;">AUTHENTICATING...</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:14px;">
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+        <span style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;">OR</span>
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+      </div>
+      <button id="guestLoginBtn" style="width:100%;margin-top:12px;padding:10px;background:rgba(107,115,148,.08);border:1px solid rgba(107,115,148,.3);border-radius:8px;color:var(--muted);font-family:var(--ff);font-size:13px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .2s;">&#128100; Continue as Guest</button>
+      <div id="noAccountRow" style="margin-top:12px;text-align:center;">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--muted);">No account? </span>
+        <button id="showRegisterBtn" style="background:none;border:none;font-family:var(--mono);font-size:10px;color:var(--accent);cursor:pointer;padding:0;text-decoration:underline;">Register here</button>
+      </div>
     </div>
-    <div class="login-field">
-      <label class="login-label">PASSWORD</label>
-      <input id="loginPass" type="password" class="login-input" placeholder="••••••••" autocomplete="current-password" />
-    </div>
-    <button id="loginBtn" class="login-submit">&#x26A1; Sign In</button>
-    <div id="loginSpinner" style="display:none;text-align:center;font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:10px;">AUTHENTICATING...</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-top:14px;">
-      <div style="flex:1;height:1px;background:var(--border);"></div>
-      <span style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;">OR</span>
-      <div style="flex:1;height:1px;background:var(--border);"></div>
-    </div>
-    <button id="guestLoginBtn" style="width:100%;margin-top:12px;padding:10px;background:rgba(107,115,148,.08);border:1px solid rgba(107,115,148,.3);border-radius:8px;color:var(--muted);font-family:var(--ff);font-size:13px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .2s;">&#128100; Continue as Guest</button>
-    <div id="noAccountRow" style="margin-top:12px;text-align:center;">
-      <span style="font-family:var(--mono);font-size:10px;color:var(--muted);">No account? </span>
-      <button id="showRegisterBtn" style="background:none;border:none;font-family:var(--mono);font-size:10px;color:var(--accent);cursor:pointer;padding:0;text-decoration:underline;">Register here</button>
-    </div>
-    <div id="registerForm" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px;">
-      <div style="font-family:var(--mono);font-size:10px;color:var(--accent4);letter-spacing:1px;margin-bottom:12px;text-align:center;">CREATE ACCOUNT</div>
+
+    <!-- ── REGISTER FORM (replaces login fields) ── -->
+    <div id="registerForm" style="display:none;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--accent4);letter-spacing:1px;margin-bottom:16px;text-align:center;">CREATE ACCOUNT</div>
       <div id="registerError" style="display:none;background:rgba(255,69,96,.1);border:1px solid rgba(255,69,96,.3);border-radius:6px;padding:8px 12px;font-family:var(--mono);font-size:11px;color:var(--error);margin-bottom:10px;"></div>
       <div class="login-field">
-        <label class="login-label">DISPLAY NAME</label>
-        <input id="registerName" type="text" class="login-input" placeholder="Your Name" autocomplete="name" />
+        <label class="login-label">USERNAME</label>
+        <input id="registerName" type="text" class="login-input" placeholder="e.g. abhi123" autocomplete="username" />
       </div>
       <div class="login-field">
         <label class="login-label">EMAIL</label>
@@ -88,7 +94,7 @@
       </div>
       <button id="registerBtn" class="login-submit" style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(124,58,237,.12));border:1px solid var(--accent4);color:var(--accent4);">&#10024; Create Account</button>
       <div id="registerSpinner" style="display:none;text-align:center;font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:10px;">CREATING ACCOUNT...</div>
-      <button id="hideRegisterBtn" style="background:none;border:none;font-family:var(--mono);font-size:10px;color:var(--muted);cursor:pointer;width:100%;margin-top:10px;text-decoration:underline;">&larr; Back to Sign In</button>
+      <button id="hideRegisterBtn" style="background:none;border:none;font-family:var(--mono);font-size:10px;color:var(--muted);cursor:pointer;width:100%;margin-top:12px;text-decoration:underline;">&larr; Back to Sign In</button>
     </div>
   </div>
 </div>
