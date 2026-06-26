@@ -401,3 +401,63 @@ select.print-select:focus { border-color: rgba(124,58,237,.4); }
 .modal-btn:hover { opacity: .85; }
 .modal-btn-skip { background: var(--surface2, #2a2a3d); color: var(--muted, #aaa); }
 .modal-btn-use  { background: var(--accent, #7c9ef8); color: #fff; }
+
+/* ── VERSION BADGE & CHANGELOG PANEL ─────────────────────────────────── */
+.ver-badge {
+  margin-left: auto; font-family: var(--mono); font-size: 10px;
+  color: var(--accent); background: rgba(0,229,255,.08);
+  border: 1px solid rgba(0,229,255,.2); border-radius: 4px;
+  padding: 2px 9px; letter-spacing: 1px; cursor: pointer;
+  transition: background .2s, box-shadow .2s;
+}
+.ver-badge:hover {
+  background: rgba(0,229,255,.18);
+  box-shadow: 0 0 10px rgba(0,229,255,.3);
+}
+
+.ver-entry {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 13px 14px 11px;
+  background: var(--surface2);
+  transition: border-color .2s;
+}
+.ver-entry:first-child { border-color: rgba(0,229,255,.3); background: rgba(0,229,255,.03); }
+
+.ver-entry-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 3px;
+}
+.ver-tag {
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  color: var(--text); letter-spacing: .5px;
+}
+.ver-tag.current { color: var(--accent); }
+.ver-entry-label {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px;
+  color: var(--accent); background: rgba(0,229,255,.1);
+  border: 1px solid rgba(0,229,255,.25); border-radius: 3px;
+  padding: 1px 6px; text-transform: uppercase;
+}
+.ver-entry-date {
+  font-family: var(--mono); font-size: 9px; color: var(--muted);
+  letter-spacing: .5px; margin-bottom: 9px;
+}
+.ver-list {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.ver-list li {
+  font-size: 11.5px; color: var(--muted); line-height: 1.5;
+  padding-left: 18px; position: relative;
+}
+.ver-list li::before {
+  content: ''; position: absolute; left: 4px; top: 7px;
+  width: 6px; height: 6px; border-radius: 50%;
+}
+.ver-list li.new { color: var(--text); }
+.ver-list li.new::before { background: var(--accent2); box-shadow: 0 0 5px var(--accent2); }
+.ver-list li.fix::before { background: var(--accent4); box-shadow: 0 0 4px var(--accent4); }
+.ver-list li.break::before { background: var(--error); box-shadow: 0 0 4px var(--error); }
+
+#verPanel { display: none; }
+#verPanel.open { display: block; transform: translateX(0) !important; }
