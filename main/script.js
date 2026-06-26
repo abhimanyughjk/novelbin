@@ -818,10 +818,39 @@ async function fetchNovelArrowChapter(chapterPageUrl) {
       const chapterId = parts.slice(2).join('/');
       const apiUrl    = `${u.origin}/api-web/novels/${slug}/chapters/${chapterId}`;
       const data      = await fetchJson(apiUrl);
-      const info      = data?.item?.chapterInfo || data?.chapterInfo || data?.item || {};
-      const rawHtml   = info.chapter_content || '';
-      const title     = info.chapter_name    || chapterId;
-      if (!rawHtml) return { title, content: '', error: 'Empty chapter content from API.' };
+
+      // Exhaustively search the response for chapter content.
+      // We log the top-level keys so bugs are visible in the browser console.
+      console.log('[NA] Chapter API response keys:', Object.keys(data || {}));
+
+      // Walk every plausible nesting path NovelArrow might use
+      const candidates = [
+        data?.item?.chapterInfo,
+        data?.chapterInfo,
+        data?.item,
+        data?.data?.chapterInfo,
+        data?.data,
+        data?.chapter,
+        data?.result,
+        data?.content,
+        data,
+      ];
+      // Pick the first candidate that has chapter_content or chapter_name
+      const info = candidates.find(c =>
+        c && typeof c === 'object' && (c.chapter_content || c.chapter_name)
+      ) || {};
+
+      console.log('[NA] info keys:', Object.keys(info));
+
+      // chapter_content may itself be nested or have alternate field names
+      const rawHtml = info.chapter_content || info.content || info.text || info.body || '';
+      const title   = info.chapter_name || info.title || info.name || chapterId;
+
+      if (!rawHtml) {
+        // Dump the full response to console so we can see what the API actually returns
+        console.warn('[NA] No content found. Full response:', JSON.stringify(data).slice(0, 500));
+        return { title, content: '', error: `Empty chapter content. API keys: ${Object.keys(data||{}).join(', ')}` };
+      }
       // Strip all HTML tags → pure plain text, preserving paragraph breaks
       const doc  = new DOMParser().parseFromString(rawHtml, 'text/html');
       // Remove script/style noise first
@@ -1210,6 +1239,35 @@ document.getElementById('bueExtractJsonBtn').addEventListener('click', () => {
 
 novelPageInput.addEventListener('keydown', e => { if (e.key === 'Enter') bueFetchBtn.click(); });
 
+/* ── VERSION CHANGELOG PANEL ─────────────────────────────────────────── */
+(function () {
+  const btn     = document.getElementById('verBadgeBtn');
+  const panel   = document.getElementById('verPanel');
+  const overlay = document.getElementById('verOverlay');
+  const closeBtn= document.getElementById('verPanelClose');
+  if (!btn || !panel) return;
+
+  function openPanel() {
+    panel.style.display = 'block';
+    overlay.style.display = 'block';
+    // Trigger transition on next frame
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { panel.style.transform = 'translateX(0)'; });
+    });
+  }
+  function closePanel() {
+    panel.style.transform = 'translateX(100%)';
+    overlay.style.display = 'none';
+    setTimeout(() => { panel.style.display = 'none'; }, 290);
+  }
+
+  btn.addEventListener('click', openPanel);
+  closeBtn.addEventListener('click', closePanel);
+  overlay.addEventListener('click', closePanel);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && panel.style.display !== 'none') closePanel(); });
+})();
+
+
 bueSendBtn.addEventListener('click', () => {
   const selected = [...bueSelected].sort((a,b) => a-b).map(i => bueFiltered[i]);
   if (selected.length === 0) return;
@@ -1445,7 +1503,10 @@ async function runNovelArrowBulkLoop(startUrl) {
       );
 
       if (error && !content) {
-        showStatus(statusBulk, `⚠ Skipping ch ${chNum} (${trunc(ch.url,35)}): ${error}`, 'warn', true);
+        // Show what's actually failing so we can diagnose the API shape issue
+        showStatus(statusBulk, `⚠ Ch ${chNum} skipped — ${error}`, 'warn', true);
+        bulkChapterTitle.textContent = `⚠ Ch ${chNum}: ${trunc(error, 60)}`;
+        console.warn(`[NA bulk] ch ${chNum} skipped:`, error, ch.url);
         continue;
       }
 
