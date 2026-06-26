@@ -2222,9 +2222,17 @@ try { if (isAllowedUrl(window.location.href)) urlInput.value = window.location.h
           // If the account was suspended or blocked, sign them out immediately
           if (currentUserData.status === 'suspended' || currentUserData.status === 'blocked') {
             await F.signOut(auth);
-            showLoginError(`Your account has been ${currentUserData.status}. Contact the admin.`);
-            loginScreen.style.display = 'flex';
+            showLoginError(`Your account has been ${currentUserData.status}. Contact the admin.`);\n            loginScreen.style.display = 'flex';
             return;
+          }
+
+          // Bootstrap admin: if this is the only user in the system and they don't have admin role yet, promote them
+          if (currentUserData.role !== 'admin') {
+            const allSnap = await F.getDocs(F.collection(db, 'users'));
+            if (allSnap.size === 1) {
+              await F.updateDoc(userRef, { role: 'admin', updatedAt: F.serverTimestamp() });
+              currentUserData = { ...currentUserData, role: 'admin' };
+            }
           }
 
           applyRoleUI(currentUserData.role || 'normal');
@@ -2261,18 +2269,38 @@ try { if (isAllowedUrl(window.location.href)) urlInput.value = window.location.h
      LOGIN
   ────────────────────────────────────────────────────────── */
   async function doLogin() {
-    const email = loginEmail.value.trim();
-    const pass  = loginPass.value;
-    if (!email || !pass) { showLoginError('Enter your email and password.'); return; }
+    let identifier = loginEmail.value.trim();
+    const pass     = loginPass.value;
+    if (!identifier || !pass) { showLoginError('Enter your email/username and password.'); return; }
     hideLoginError();
     loginBtn.disabled = true;
     loginSpinner.style.display = 'block';
     try {
+      // If the input doesn't look like an email, treat it as a username
+      let email = identifier;
+      if (!identifier.includes('@')) {
+        // Look up username in Firestore
+        const uname = identifier.replace(/^@/, '').toLowerCase();
+        const q = F.query(
+          F.collection(db, 'users'),
+          F.where('username', '==', uname)
+        );
+        const snap = await F.getDocs(q);
+        if (snap.empty) {
+          // Try case-insensitive by trying original case too
+          const q2 = F.query(F.collection(db, 'users'), F.where('username', '==', identifier.replace(/^@/, '')));
+          const snap2 = await F.getDocs(q2);
+          if (snap2.empty) { showLoginError('No account found with that username.'); return; }
+          email = snap2.docs[0].data().email;
+        } else {
+          email = snap.docs[0].data().email;
+        }
+      }
       await F.signInWithEmailAndPassword(auth, email, pass);
     } catch(e) {
       const msgs = {
-        'auth/invalid-credential': 'Incorrect email or password.',
-        'auth/user-not-found':     'No account found with that email.',
+        'auth/invalid-credential': 'Incorrect email/username or password.',
+        'auth/user-not-found':     'No account found.',
         'auth/wrong-password':     'Incorrect password.',
         'auth/too-many-requests':  'Too many attempts — try again later.',
         'auth/invalid-email':      'Invalid email address.',
@@ -3077,11 +3105,11 @@ try { if (isAllowedUrl(window.location.href)) urlInput.value = window.location.h
   if (guestLoginBtn) {
     guestLoginBtn.addEventListener('click', () => {
       currentUser     = { uid: 'guest', email: 'guest@local', isGuest: true };
-      currentUserData = { role: 'guest', status: 'active', displayName: 'Guest', username: '' };
+      currentUserData = { role: 'guest', status: 'active', displayName: '', username: '' };
       loginScreen.style.display    = 'none';
       userAvatarBtn.style.display  = 'flex';
       upEmail.textContent          = 'guest session';
-      upDisplayName.textContent    = 'Guest';
+      upDisplayName.textContent    = '';
       userAvatarBtn.textContent    = 'G';
       applyRoleUI('guest');
       upSettingName.value          = '';
