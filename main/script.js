@@ -1342,6 +1342,12 @@ bulkStartBtn.addEventListener('click', async () => {
 bulkStopBtn.addEventListener('click', () => { bulkStopped = true; setBulkUI(false); stopBulkTimer(); progressLabel.textContent = 'STOPPING…'; showStatus(statusBulk, '⏹ Stopping after current chapter…', 'warn', true); });
 
 async function runBulkLoop(startUrl) {
+  // ── NovelArrow: use JSON API for reliable content + chapter list ──────
+  if (isNovelArrowUrl(startUrl)) {
+    await runNovelArrowBulkLoop(startUrl);
+    return;
+  }
+
   let currentUrl = startUrl;
   while (!bulkStopped) {
     try {
@@ -1355,7 +1361,6 @@ async function runBulkLoop(startUrl) {
       );
       const { title, content, error } = extractFromHtml(html, currentUrl);
       if (error && !content) {
-        // Content parse error on a fetched page — skip this chapter and try next
         showStatus(statusBulk, `⚠ Parse error on "${trunc(currentUrl,35)}", skipping: ${error}`, 'warn', true);
         const nav = getNextUrlFromHtml(html, currentUrl);
         if (nav.isLast || !nav.nextUrl) { finishBulk('continuous'); break; }
@@ -1372,7 +1377,6 @@ async function runBulkLoop(startUrl) {
       if (nav.isLast || !nav.nextUrl) { finishBulk('continuous'); break; }
       currentUrl = nav.nextUrl; await sleep(800);
     } catch(err) {
-      // All 4 attempts exhausted for this chapter — stop the run
       setBulkUI(false); stopBulkTimer();
       showStatus(statusBulk, `✗ Failed after 4 attempts on "${trunc(currentUrl,35)}": ${err.message}`, 'error', true);
       if (bulkCount > 0) {
@@ -1389,51 +1393,93 @@ async function runBulkLoop(startUrl) {
   }
 }
 
+/* ── NovelArrow "till latest" bulk loop ────────────────────────────────
+   1. Fetch the full chapter list via the JSON API (same as URL Extractor).
+   2. Find which chapter to start from (matching the startUrl).
+   3. Fetch each chapter's content sequentially via the JSON API.         */
+async function runNovelArrowBulkLoop(startUrl) {
+  // 1. Get full free chapter list
+  let chapterList;
+  try {
+    showStatus(statusBulk, '⚡ Fetching NovelArrow chapter list via API…', 'warn', true);
+    progressCurrent.textContent = 'Fetching chapter list…';
+    const result = await bueFetchNovelArrowChapters(startUrl);
+    chapterList = result.chapters;
+    if (!chapterList || chapterList.length === 0) throw new Error('No free chapters found.');
+  } catch(err) {
+    setBulkUI(false); stopBulkTimer();
+    showStatus(statusBulk, `✗ Could not fetch chapter list: ${err.message}`, 'error', true);
+    return;
+  }
 
-/* ── MANUAL PASTE MODAL ───────────────────────────────────────────────────
-   Shows a popup asking the user to paste chapter text manually.
-   Returns { pasted: true, title, content } or { pasted: false }.       */
-function askUserPaste(chapterIndex, total, url) {
-  return new Promise(resolve => {
-    const modal    = document.getElementById('pasteModal');
-    const subtitle = document.getElementById('pasteModalSubtitle');
-    const link     = document.getElementById('pasteModalLink');
-    const textarea = document.getElementById('pasteModalTextarea');
-    const btnSkip  = document.getElementById('pasteModalSkip');
-    const btnUse   = document.getElementById('pasteModalUse');
+  // 2. Find start index — match by chapter-id slug in the URL
+  const startParts = (() => { try { return new URL(startUrl).pathname.split('/').filter(Boolean); } catch { return []; } })();
+  const startChapterId = startParts.slice(2).join('/'); // everything after /chapter/<slug>/
+  let startIdx = 0;
+  if (startChapterId) {
+    const found = chapterList.findIndex(ch => ch.url.includes(startChapterId));
+    if (found !== -1) startIdx = found;
+  }
 
-    subtitle.textContent = `Chapter ${chapterIndex + 1} of ${total} — ${url}`;
-    link.href = url;
-    textarea.value = '';
-    modal.style.display = 'flex';
-    textarea.focus();
+  const total = chapterList.length - startIdx;
+  progressCurrent.textContent = `Starting from chapter ${startIdx + 1} of ${chapterList.length} — ${total} to scrape`;
+  canvasIndicatorText.textContent = `0 / ${total} chapters`;
+  showStatus(statusBulk, `🚀 Scraping ${total} chapter${total===1?'':'s'} via NovelArrow API…`, 'warn', true);
 
-    function cleanup() {
-      modal.style.display = 'none';
-      btnSkip.removeEventListener('click', onSkip);
-      btnUse.removeEventListener('click',  onUse);
+  // 3. Fetch each chapter sequentially
+  for (let i = startIdx; i < chapterList.length; i++) {
+    if (bulkStopped) break;
+    const ch = chapterList[i];
+    const chNum = i - startIdx + 1;
+
+    progressCurrent.textContent = `Ch ${chNum}/${total}: ${trunc(ch.url, 50)}`;
+    progressBarFill.style.width = Math.round((chNum / total) * 100) + '%';
+
+    try {
+      const { title, content, error } = await withRetry(
+        () => fetchNovelArrowChapter(ch.url),
+        { maxAttempts: 4, onRetry: (attempt, max, err, delay) => {
+          progressCurrent.textContent = `Retry ${attempt}/${max} — ch ${chNum}/${total}: ${(delay/1000).toFixed(1)}s delay`;
+          canvasIndicatorText.textContent = `Retrying ch ${chNum} (attempt ${attempt}/${max})…`;
+        }}
+      );
+
+      if (error && !content) {
+        showStatus(statusBulk, `⚠ Skipping ch ${chNum} (${trunc(ch.url,35)}): ${error}`, 'warn', true);
+        continue;
+      }
+
+      bulkCount++; bulkLastTitle = title;
+      if (!bulkFirstTitle) bulkFirstTitle = title;
+      const raw = `\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
+      bulkChunks.push({ title, content, raw }); updateBulkOutput();
+      chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount === 1 ? '' : 's');
+      bulkChapterTitle.textContent = title;
+      canvasIndicatorText.textContent = `${bulkCount} / ${total} scraped`;
+      recordChapterDone(bulkCount);
+      await sleep(700);
+
+    } catch(err) {
+      showStatus(statusBulk, `✗ Failed ch ${chNum} after 4 attempts: ${err.message}`, 'error', true);
+      // Insert placeholder and continue rather than aborting the whole run
+      const placeholder = `[Chapter ${chNum} could not be fetched — open manually: ${ch.url}]`;
+      const raw = `\n\n${'─'.repeat(60)}\nChapter ${chNum} [MISSING]\n${'─'.repeat(60)}\n\n${placeholder}`;
+      bulkChunks.push({ title: `Chapter ${chNum} [MISSING]`, content: placeholder, raw });
+      updateBulkOutput();
+      await sleep(1500);
     }
+  }
 
-    function onSkip() {
-      cleanup();
-      resolve({ pasted: false });
-    }
-
-    function onUse() {
-      const raw = textarea.value.trim();
-      if (!raw) { onSkip(); return; }
-      // Try to pull a title from the first non-empty line
-      const lines   = raw.split('\n').map(l => l.trim()).filter(Boolean);
-      const title   = lines[0].length < 120 ? lines[0] : `Chapter ${chapterIndex + 1}`;
-      const content = lines.slice(title === lines[0] ? 1 : 0).join('\n\n').trim() || raw;
-      cleanup();
-      resolve({ pasted: true, title, content });
-    }
-
-    btnSkip.addEventListener('click', onSkip);
-    btnUse.addEventListener('click',  onUse);
-  });
+  if (!bulkStopped) {
+    progressBarFill.style.width = '100%';
+    finishBulk('continuous');
+  } else if (bulkText) {
+    stopBulkTimer(); setBulkUI(false);
+    autoSaveHistory({ type: 'bulk', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle, chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
+    showStatus(statusBulk, `⏹ Stopped — ${bulkCount} chapters saved.`, 'warn', true);
+  }
 }
+
 
 async function runCustomUrlLoop(urls) {
   const total      = urls.length;
