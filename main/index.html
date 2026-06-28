@@ -330,7 +330,7 @@
     <h1>NovelBin Extractor</h1>
     <p>novelbin.com + novelarrow.com // chapter ripper — web edition</p>
   </div>
-  <button class="ver-badge" id="verBadgeBtn" title="View changelog">v9.7 ▾</button>
+  <button class="ver-badge" id="verBadgeBtn" title="View changelog">v9.9 ▾</button>
   <button id="userAvatarBtn" title="Account" style="display:none;margin-left:8px;width:32px;height:32px;border-radius:50%;border:2px solid var(--accent2);background:rgba(124,58,237,.2);color:var(--text);font-family:var(--mono);font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;">?</button>
 </div>
 <div class="scanline"></div>
@@ -683,11 +683,37 @@
 
   <div style="padding:16px 18px;display:flex;flex-direction:column;gap:20px;">
 
+    <!-- v9.9 -->
+    <div class="ver-entry">
+      <div class="ver-entry-header">
+        <span class="ver-tag current">v9.9</span>
+        <span class="ver-entry-label">Current</span>
+      </div>
+      <div class="ver-entry-date">Jun 2025</div>
+      <ul class="ver-list">
+        <li class="fix">Proxy list overhauled — removed dead/limited proxies (gobetween, htmldriven), added codetabs.com</li>
+        <li class="fix">Proxies now ordered by reliability tier: corsproxy.io + allorigins + codetabs + Cloudflare worker first</li>
+        <li class="fix">Removed thingproxy from Tier 1 (100KB limit too small for novel chapter HTML)</li>
+      </ul>
+    </div>
+
+    <!-- v9.8 -->
+    <div class="ver-entry">
+      <div class="ver-entry-header">
+        <span class="ver-tag">v9.8</span>
+      </div>
+      <div class="ver-entry-date">Jun 2025</div>
+      <ul class="ver-list">
+        <li class="fix">NovelArrow "Till Latest" bulk now uses fetchPageHtml + HTML parsing instead of broken JSON API</li>
+        <li class="fix">Custom URL list: NovelArrow chapter URLs now use the HTML path (removed broken JSON API branch)</li>
+        <li class="fix">Eliminated all reliance on /api-web/ endpoints for bulk scraping</li>
+      </ul>
+    </div>
+
     <!-- v9.7 -->
     <div class="ver-entry">
       <div class="ver-entry-header">
-        <span class="ver-tag current">v9.7</span>
-        <span class="ver-entry-label">Current</span>
+        <span class="ver-tag">v9.7</span>
       </div>
       <div class="ver-entry-date">Jun 2025</div>
       <ul class="ver-list">
