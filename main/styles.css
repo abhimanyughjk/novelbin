@@ -794,3 +794,89 @@ select.print-select:focus { border-color: rgba(124,58,237,.4); }
   transition: border-color .2s;
 }
 .admin-report-comment-input:focus { border-color: rgba(245,158,11,.4); }
+
+
+/* ── CHAPTER STATUS PANEL ─────────────────────────────────────── */
+#chStatusPanel { display: none; }
+#chStatusPanel.open { display: flex; }
+
+.chs-stat-cell {
+  flex: 1; padding: 10px 6px; text-align: center;
+  border-right: 1px solid var(--border);
+}
+.chs-stat-cell:last-child { border-right: none; }
+.chs-stat-num {
+  font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--text);
+  line-height: 1;
+}
+.chs-stat-label {
+  font-family: var(--mono); font-size: 8px; color: var(--muted);
+  letter-spacing: 1px; margin-top: 3px;
+}
+.chs-stat-cell.success .chs-stat-num { color: var(--success); }
+.chs-stat-cell.pending .chs-stat-num { color: var(--warn); }
+.chs-stat-cell.failed  .chs-stat-num { color: var(--error); }
+
+.chs-filter-tab {
+  flex: 1; padding: 7px 4px; background: transparent; border: none;
+  color: var(--muted); font-family: var(--mono); font-size: 9px;
+  letter-spacing: .5px; cursor: pointer; text-transform: uppercase;
+  border-right: 1px solid var(--border); transition: all .15s;
+}
+.chs-filter-tab:last-child { border-right: none; }
+.chs-filter-tab.active { color: var(--accent); background: rgba(0,229,255,.06); box-shadow: inset 0 -2px 0 var(--accent); }
+.chs-filter-tab:hover:not(.active) { color: var(--text); background: rgba(255,255,255,.03); }
+
+#chsChapterList::-webkit-scrollbar { width: 4px; }
+#chsChapterList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.chs-tile {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 7px 9px; border-radius: 7px; border: 1px solid var(--border);
+  background: var(--surface2); transition: border-color .2s;
+}
+.chs-tile.ok     { border-left: 3px solid var(--success); }
+.chs-tile.pending{ border-left: 3px solid var(--warn); }
+.chs-tile.failed { border-left: 3px solid var(--error); background: rgba(255,69,96,.03); }
+
+.chs-tile-icon {
+  font-size: 12px; line-height: 1; flex-shrink: 0; margin-top: 1px;
+}
+.chs-tile-body { flex: 1; min-width: 0; }
+.chs-tile-num {
+  font-family: var(--mono); font-size: 9px; color: var(--muted);
+  letter-spacing: .5px;
+}
+.chs-tile-title {
+  font-size: 11px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.3; margin-top: 1px;
+}
+.chs-tile.pending .chs-tile-title { color: var(--muted); font-style: italic; font-weight: 400; }
+.chs-tile-reason {
+  font-family: var(--mono); font-size: 9px; color: var(--error);
+  margin-top: 3px; line-height: 1.5; word-break: break-word;
+}
+.chs-tile-badge {
+  flex-shrink: 0; font-family: var(--mono); font-size: 8px;
+  letter-spacing: .5px; padding: 2px 5px; border-radius: 3px; border: 1px solid;
+  margin-top: 1px;
+}
+.chs-tile-badge.ok      { color: var(--success); border-color: rgba(0,245,160,.3); background: rgba(0,245,160,.07); }
+.chs-tile-badge.pending { color: var(--warn);    border-color: rgba(255,179,0,.3);  background: rgba(255,179,0,.07); }
+.chs-tile-badge.failed  { color: var(--error);   border-color: rgba(255,69,96,.3);  background: rgba(255,69,96,.07); }
+
+/* ── Chapter status: paste hint on failed tiles ── */
+.chs-tile-paste-hint {
+  font-family: var(--mono); font-size: 9px; color: var(--accent4);
+  margin-top: 4px; letter-spacing: .5px;
+  opacity: .8;
+}
+.chs-tile.failed:hover .chs-tile-paste-hint { opacity: 1; color: var(--warn); }
+
+/* ── Inline paste popup ── */
+#chsPastePopup {
+  position: relative;  /* overridden to absolute when attached to a tile */
+  margin-top: 8px;
+}
+#chsPastePopup textarea:focus { border-color: rgba(245,158,11,.4) !important; }
