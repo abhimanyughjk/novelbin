@@ -776,10 +776,11 @@ async function bueFetchNovelArrowChapters(rawUrl) {
   }
 
   // 2. Filter to free chapters only
+  // Use falsy checks — API may return null/undefined rather than boolean false
   const freeItems = items.filter(ch =>
-    ch.premium_content === false &&
-    ch.platinum_content === false &&
-    (ch.coin_price === 0 || ch.coin_price === null || ch.coin_price === undefined)
+    !ch.premium_content &&
+    !ch.platinum_content &&
+    !ch.coin_price
   );
 
   if (freeItems.length === 0) {
@@ -833,16 +834,35 @@ async function fetchNovelArrowChapter(chapterPageUrl) {
         data?.chapterInfo,
         data?.item,
         data?.data?.chapterInfo,
+        data?.data?.item,
         data?.data,
         data?.chapter,
+        data?.result?.chapterInfo,
+        data?.result?.item,
         data?.result,
         data?.content,
         data,
       ];
+
+      // Helper: recursively scan any object for content-like fields
+      function deepFindContent(obj, depth = 0) {
+        if (!obj || typeof obj !== 'object' || depth > 4) return null;
+        if (obj.chapter_content || obj.content || obj.text || obj.body) return obj;
+        for (const val of Object.values(obj)) {
+          if (val && typeof val === 'object') {
+            const found = deepFindContent(val, depth + 1);
+            if (found) return found;
+          }
+        }
+        return null;
+      }
+
       // Pick the first candidate that has chapter_content or chapter_name
-      const info = candidates.find(c =>
+      let info = candidates.find(c =>
         c && typeof c === 'object' && (c.chapter_content || c.chapter_name)
-      ) || {};
+      );
+      // Fallback: deep scan the entire response
+      if (!info) info = deepFindContent(data) || {};
 
       console.log('[NA] info keys:', Object.keys(info));
 
@@ -852,8 +872,8 @@ async function fetchNovelArrowChapter(chapterPageUrl) {
 
       if (!rawHtml) {
         // Dump the full response to console so we can see what the API actually returns
-        console.warn('[NA] No content found. Full response:', JSON.stringify(data).slice(0, 500));
-        return { title, content: '', error: `Empty chapter content. API keys: ${Object.keys(data||{}).join(', ')}` };
+        console.warn('[NA] No content found. Full response:', JSON.stringify(data).slice(0, 800));
+        return { title, content: '', error: `Empty chapter content — API may have changed. Keys found: ${Object.keys(data||{}).join(', ')}. Check browser console for full response.` };
       }
       // Strip all HTML tags → pure plain text, preserving paragraph breaks
       const doc  = new DOMParser().parseFromString(rawHtml, 'text/html');
@@ -1187,10 +1207,11 @@ document.getElementById('bueExtractJsonBtn').addEventListener('click', () => {
   }
 
   // Filter to free chapters only (same logic as API path)
+  // Use falsy checks — API may return null/undefined rather than boolean false
   const freeItems = items.filter(ch =>
-    ch.premium_content === false &&
-    ch.platinum_content === false &&
-    (ch.coin_price === 0 || ch.coin_price === null || ch.coin_price === undefined)
+    !ch.premium_content &&
+    !ch.platinum_content &&
+    !ch.coin_price
   );
 
   if (freeItems.length === 0) {
@@ -1752,7 +1773,7 @@ bulkStartBtn.addEventListener('click', async () => {
     const rawUrls = parseUrlList(urlListInput.value).filter(u => isAllowedUrl(u));
     if (rawUrls.length === 0) { showStatus(statusBulk, '⚠ No valid novelbin.com or novelarrow.com URLs in list. Paste URLs and validate first.', 'error', true); return; }
     customUrlList = rawUrls; bulkStartUrl = rawUrls[0];
-    const batchSz = rawUrls.length > 100 ? 8 : rawUrls.length > 30 ? 5 : 3;
+    const batchSz = rawUrls.length > 100 ? 4 : rawUrls.length > 30 ? 3 : 2;
     progressCurrent.textContent = `0 / ${rawUrls.length} chapters…`;
     canvasIndicatorText.textContent = `Custom list: ${rawUrls.length} URLs`;
     setBulkUI(true);
@@ -1952,7 +1973,7 @@ async function runNovelArrowBulkLoop(startUrl) {
 
 async function runCustomUrlLoop(urls) {
   const total      = urls.length;
-  const BATCH_SIZE = total > 100 ? 8 : total > 30 ? 5 : 3;
+  const BATCH_SIZE = total > 100 ? 4 : total > 30 ? 3 : 2;
   const results    = new Array(total).fill(null);
   const failedIdxs = []; // indices that exhausted all retries in main pass
 
