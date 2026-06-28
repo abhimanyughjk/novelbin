@@ -370,15 +370,17 @@ clearUrlListBtn.addEventListener('click', () => {
 
 /* ── FETCH + EXTRACT ── */
 const CORS_PROXIES = [
+  // Tier 1 — most reliable, actively maintained, no size issues
   u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u => `https://thingproxy.freeboard.io/fetch/${u}`,
-  u => `https://cors-anywhere.herokuapp.com/${u}`,
-  u => `https://proxy.cors.sh/${u}`,
-  u => `https://gobetween.oklabs.org/${u}`,
+  u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
   u => `https://test.cors.workers.dev/?${encodeURIComponent(u)}`,
+  // Tier 2 — generally work but may be rate-limited or require Origin header
+  u => `https://proxy.cors.sh/${u}`,
+  u => `https://cors-anywhere.herokuapp.com/${u}`,
+  // Tier 3 — fallbacks with known limitations (100KB limit, slow, etc.)
+  u => `https://thingproxy.freeboard.io/fetch/${u}`,
   u => `https://crossorigin.me/${u}`,
-  u => `https://cors-proxy.htmldriven.com/?url=${encodeURIComponent(u)}`,
   u => `https://yacdn.org/serve/${u}`,
 ];
 
@@ -644,6 +646,7 @@ function novelArrowSlug(url) {
    The raw-mode proxies (corsproxy.io, etc.) return the body directly.
 ─────────────────────────────────────────────────────────────────────── */
 const JSON_PROXY_STRATEGIES = [
+  // Tier 1 — most reliable
   // allorigins /get — returns JSON envelope: { contents: "...", status: { ... } }
   {
     makeUrl: u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
@@ -663,51 +666,36 @@ const JSON_PROXY_STRATEGIES = [
     makeUrl: u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
     extract: text => JSON.parse(text)
   },
-  // thingproxy — returns raw body (100KB limit, fine for chapter API)
+  // codetabs — returns raw body, actively maintained
   {
-    makeUrl: u => `https://thingproxy.freeboard.io/fetch/${u}`,
+    makeUrl: u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
     extract: text => JSON.parse(text)
   },
-  // cors-anywhere — returns raw body
-  {
-    makeUrl: u => `https://cors-anywhere.herokuapp.com/${u}`,
-    extract: text => JSON.parse(text)
-  },
-  // cors.sh — returns raw body
-  {
-    makeUrl: u => `https://proxy.cors.sh/${u}`,
-    extract: text => JSON.parse(text)
-  },
-  // Cloudflare cors-anywhere worker — returns raw body
+  // Cloudflare worker — 100k req/day, very reliable
   {
     makeUrl: u => `https://test.cors.workers.dev/?${encodeURIComponent(u)}`,
     extract: text => JSON.parse(text)
   },
-  // gobetween — returns raw body
+  // Tier 2 — generally work, may be rate-limited
   {
-    makeUrl: u => `https://gobetween.oklabs.org/${u}`,
+    makeUrl: u => `https://proxy.cors.sh/${u}`,
     extract: text => JSON.parse(text)
   },
-  // HTMLDriven — returns raw body
   {
-    makeUrl: u => `https://cors-proxy.htmldriven.com/?url=${encodeURIComponent(u)}`,
-    extract: text => {
-      // HTMLDriven sometimes wraps in { "header": "...", "body": "..." }
-      try {
-        const j = JSON.parse(text);
-        if (j && typeof j.body === 'string') return JSON.parse(j.body);
-        return j;
-      } catch { return JSON.parse(text); }
-    }
-  },
-  // yacdn — returns raw body
-  {
-    makeUrl: u => `https://yacdn.org/serve/${u}`,
+    makeUrl: u => `https://cors-anywhere.herokuapp.com/${u}`,
     extract: text => JSON.parse(text)
   },
-  // crossorigin.me — returns raw body
+  // Tier 3 — fallbacks
+  {
+    makeUrl: u => `https://thingproxy.freeboard.io/fetch/${u}`,
+    extract: text => JSON.parse(text)
+  },
   {
     makeUrl: u => `https://crossorigin.me/${u}`,
+    extract: text => JSON.parse(text)
+  },
+  {
+    makeUrl: u => `https://yacdn.org/serve/${u}`,
     extract: text => JSON.parse(text)
   },
 ];
