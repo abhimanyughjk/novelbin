@@ -1271,6 +1271,376 @@ novelPageInput.addEventListener('keydown', e => { if (e.key === 'Enter') bueFetc
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && panel.style.display !== 'none') closePanel(); });
 })();
 
+/* ── CHAPTER STATUS PANEL ─────────────────────────────────────────────── */
+const ChapterStatus = (function () {
+  // _chapters: Array<{ num, title, url, status:'pending'|'ok'|'failed', reason, _el }>
+  // _el is the live DOM tile element for that chapter (set on first render)
+  let _chapters   = [];
+  let _filter     = 'all';
+  let _isOpen     = false;
+
+  // Callback registry: pasteCallback[idx] = fn(text) — called when user applies a paste for that chapter
+  const _pasteCallbacks = {};
+
+  const panel      = document.getElementById('chStatusPanel');
+  const overlay    = document.getElementById('chStatusOverlay');
+  const closeBtn   = document.getElementById('chStatusPanelClose');
+  const badgeBtn   = document.getElementById('chStatusBadgeBtn');
+  const listEl     = document.getElementById('chsChapterList');
+  const emptyEl    = document.getElementById('chsEmpty');
+  const panelTitle = document.getElementById('chsPanelTitle');
+  const numTotal   = document.getElementById('chsNumTotal');
+  const numOk      = document.getElementById('chsNumOk');
+  const numPending = document.getElementById('chsNumPending');
+  const numFailed  = document.getElementById('chsNumFailed');
+
+  // ── Inline paste popup (one shared, repositioned per tile) ───────────
+  let _popup       = null; // DOM element, created lazily
+  let _popupChIdx  = -1;   // which chapter index the popup belongs to
+
+  function getPopup() {
+    if (_popup) return _popup;
+    _popup = document.createElement('div');
+    _popup.id = 'chsPastePopup';
+    _popup.style.cssText = [
+      'position:absolute',
+      'z-index:10',
+      'left:0','right:0',
+      'background:var(--surface2)',
+      'border:1px solid rgba(245,158,11,.4)',
+      'border-radius:8px',
+      'padding:11px 12px',
+      'box-shadow:0 8px 28px rgba(0,0,0,.5)',
+      'display:none',
+    ].join(';');
+    _popup.innerHTML = `
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent4);letter-spacing:1px;margin-bottom:6px;" id="chsPastePopupLabel">MANUAL PASTE — CH ?</div>
+      <a id="chsPastePopupLink" href="#" target="_blank" rel="noopener"
+         style="display:block;font-family:var(--mono);font-size:9px;color:var(--accent);
+                text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                margin-bottom:8px;padding:4px 6px;border:1px solid rgba(0,229,255,.2);border-radius:4px;
+                background:rgba(0,229,255,.05);">🔗 Open chapter in new tab</a>
+      <textarea id="chsPastePopupTextarea"
+        placeholder="Paste the chapter text here…"
+        spellcheck="false"
+        style="width:100%;height:100px;resize:vertical;background:var(--surface3);
+               border:1px solid var(--border);border-radius:6px;color:var(--text);
+               font-family:var(--mono);font-size:10px;padding:7px 8px;
+               box-sizing:border-box;outline:none;line-height:1.5;
+               transition:border-color .2s;"></textarea>
+      <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
+        <button id="chsPastePopupApply"
+          style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid var(--success);
+                 background:rgba(0,245,160,.1);color:var(--success);font-family:var(--ff);
+                 font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;text-transform:uppercase;">
+          ✓ Apply Paste
+        </button>
+        <button id="chsPastePopupCancel"
+          style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);
+                 background:transparent;color:var(--muted);font-family:var(--ff);
+                 font-size:11px;cursor:pointer;">
+          Cancel
+        </button>
+      </div>
+      <div id="chsPastePopupErr" style="display:none;font-family:var(--mono);font-size:9px;color:var(--error);margin-top:6px;"></div>
+    `;
+
+    // Wire textarea focus border
+    const ta = _popup.querySelector('#chsPastePopupTextarea');
+    ta.addEventListener('focus', () => { ta.style.borderColor = 'rgba(245,158,11,.4)'; });
+    ta.addEventListener('blur',  () => { ta.style.borderColor = 'var(--border)'; });
+
+    // Cancel
+    _popup.querySelector('#chsPastePopupCancel').addEventListener('click', hidePopup);
+
+    // Apply
+    _popup.querySelector('#chsPastePopupApply').addEventListener('click', () => {
+      const text = ta.value.trim();
+      const errEl = _popup.querySelector('#chsPastePopupErr');
+      if (!text) {
+        errEl.textContent = 'Paste something first — or cancel.';
+        errEl.style.display = 'block';
+        return;
+      }
+      errEl.style.display = 'none';
+      const cb = _pasteCallbacks[_popupChIdx];
+      if (cb) cb(text);
+      hidePopup();
+    });
+
+    // Clicking outside the popup (but inside the panel list) closes it
+    listEl.addEventListener('click', e => {
+      if (_popup.style.display !== 'none' && !_popup.contains(e.target)) {
+        const tile = e.target.closest('.chs-tile');
+        // Only close if clicked outside the currently-open tile
+        if (!tile || parseInt(tile.dataset.chIdx) !== _popupChIdx) hidePopup();
+      }
+    }, true);
+
+    return _popup;
+  }
+
+  function showPopup(chIdx, anchorEl) {
+    const c = _chapters[chIdx];
+    if (!c) return;
+    _popupChIdx = chIdx;
+    const p = getPopup();
+    p.querySelector('#chsPastePopupLabel').textContent =
+      `MANUAL PASTE — CH ${c.num}${c.title ? ' · ' + trunc(c.title, 28) : ''}`;
+    const link = p.querySelector('#chsPastePopupLink');
+    if (c.url) { link.href = c.url; link.style.display = 'block'; link.textContent = '🔗 ' + c.url; }
+    else       { link.style.display = 'none'; }
+    const ta = p.querySelector('#chsPastePopupTextarea');
+    ta.value = '';
+    p.querySelector('#chsPastePopupErr').style.display = 'none';
+
+    // Attach popup right after the anchor tile
+    anchorEl.style.position = 'relative';
+    anchorEl.appendChild(p);
+    p.style.display = 'block';
+    ta.focus();
+  }
+
+  function hidePopup() {
+    if (!_popup) return;
+    _popup.style.display = 'none';
+    _popupChIdx = -1;
+    // Detach from whatever tile it's in (keeps DOM clean)
+    if (_popup.parentElement) _popup.parentElement.removeChild(_popup);
+  }
+
+  // ── Tile factory — builds a single live DOM element ──────────────────
+  function makeTile(c) {
+    const el = document.createElement('div');
+    el.className = `chs-tile ${c.status}`;
+    el.dataset.chIdx = c.num - 1;  // 0-based index
+
+    const titleText  = c.title  || `Chapter ${c.num}`;
+    const reasonHtml = c.reason
+      ? `<div class="chs-tile-reason">⚠ ${esc(c.reason)}</div>`
+      : '';
+    const pasteHint  = c.status === 'failed'
+      ? `<div class="chs-tile-paste-hint">Click to paste manually</div>`
+      : '';
+
+    const icons  = { ok: '✓', pending: '⏳', failed: '✗' };
+    const labels = { ok: 'DONE', pending: 'PENDING', failed: 'FAILED' };
+
+    el.innerHTML = `
+      <div class="chs-tile-icon">${icons[c.status] || '⏳'}</div>
+      <div class="chs-tile-body">
+        <div class="chs-tile-num">CH ${c.num}</div>
+        <div class="chs-tile-title" title="${esc(titleText)}">${esc(titleText)}</div>
+        ${reasonHtml}
+        ${pasteHint}
+      </div>
+      <div class="chs-tile-badge ${c.status}">${labels[c.status] || 'PENDING'}</div>
+    `;
+
+    // Click on a failed tile → show inline paste popup
+    if (c.status === 'failed') {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', evt => {
+        if (_popup && _popup.contains(evt.target)) return; // ignore clicks inside popup itself
+        const currentlyOpen = _popup && _popup.style.display !== 'none' && _popupChIdx === (c.num - 1);
+        if (currentlyOpen) { hidePopup(); return; }
+        showPopup(c.num - 1, el);
+      });
+    }
+
+    c._el = el;
+    return el;
+  }
+
+  // Update an existing tile element in-place without a full re-render
+  function patchTile(c) {
+    if (!c._el) return;
+    const el = c._el;
+    el.className = `chs-tile ${c.status}`;
+    const titleText  = c.title  || `Chapter ${c.num}`;
+    const reasonHtml = c.reason ? `<div class="chs-tile-reason">⚠ ${esc(c.reason)}</div>` : '';
+    const pasteHint  = c.status === 'failed' ? `<div class="chs-tile-paste-hint">Click to paste manually</div>` : '';
+    const icons  = { ok: '✓', pending: '⏳', failed: '✗' };
+    const labels = { ok: 'DONE', pending: 'PENDING', failed: 'FAILED' };
+
+    el.innerHTML = `
+      <div class="chs-tile-icon">${icons[c.status] || '⏳'}</div>
+      <div class="chs-tile-body">
+        <div class="chs-tile-num">CH ${c.num}</div>
+        <div class="chs-tile-title" title="${esc(titleText)}">${esc(titleText)}</div>
+        ${reasonHtml}
+        ${pasteHint}
+      </div>
+      <div class="chs-tile-badge ${c.status}">${labels[c.status] || 'PENDING'}</div>
+    `;
+
+    if (c.status === 'failed') {
+      el.style.cursor = 'pointer';
+      el.onclick = evt => {
+        if (_popup && _popup.contains(evt.target)) return;
+        const open = _popup && _popup.style.display !== 'none' && _popupChIdx === (c.num - 1);
+        if (open) { hidePopup(); return; }
+        showPopup(c.num - 1, el);
+      };
+    } else {
+      el.style.cursor = '';
+      el.onclick = null;
+      // Close popup if it was open for this tile
+      if (_popupChIdx === (c.num - 1)) hidePopup();
+    }
+  }
+
+  // ── Panel open / close ───────────────────────────────────────────────
+  function openPanel() {
+    _isOpen = true;
+    panel.style.display = 'flex';
+    overlay.style.display = 'block';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      panel.style.transform = 'translateX(0)';
+    }));
+    applyFilter();
+  }
+  function closePanel() {
+    hidePopup();
+    _isOpen = false;
+    panel.style.transform = 'translateX(100%)';
+    overlay.style.display = 'none';
+    setTimeout(() => { panel.style.display = 'none'; }, 290);
+  }
+
+  if (badgeBtn)  badgeBtn.addEventListener('click', openPanel);
+  if (closeBtn)  closeBtn.addEventListener('click', closePanel);
+  if (overlay)   overlay.addEventListener('click', closePanel);
+
+  // Filter tabs
+  document.querySelectorAll('.chs-filter-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.chs-filter-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      _filter = tab.dataset.filter;
+      applyFilter();
+    });
+  });
+
+  function updateSummary() {
+    const ok      = _chapters.filter(c => c.status === 'ok').length;
+    const pending = _chapters.filter(c => c.status === 'pending').length;
+    const failed  = _chapters.filter(c => c.status === 'failed').length;
+    numTotal.textContent   = _chapters.length;
+    numOk.textContent      = ok;
+    numPending.textContent = pending;
+    numFailed.textContent  = failed;
+  }
+
+  // Rebuild the list DOM fully from _chapters (respecting filter)
+  function applyFilter() {
+    if (!listEl) return;
+    updateSummary();
+
+    if (_chapters.length === 0) {
+      listEl.innerHTML = '';
+      emptyEl.style.display = 'block';
+      return;
+    }
+    emptyEl.style.display = 'none';
+
+    const visible = _filter === 'all'
+      ? _chapters
+      : _chapters.filter(c => c.status === _filter);
+
+    // Re-attach only tiles in current filter view
+    listEl.innerHTML = '';
+    visible.forEach(c => {
+      if (!c._el) makeTile(c); // build if first time seen
+      listEl.appendChild(c._el);
+    });
+
+    if (bulkRunning) listEl.scrollTop = listEl.scrollHeight;
+  }
+
+  // ── Public API ───────────────────────────────────────────────────────
+  return {
+    /** Reset and initialise with N pending chapters (with optional URL list) */
+    init(count, novelTitle, urls) {
+      hidePopup();
+      Object.keys(_pasteCallbacks).forEach(k => delete _pasteCallbacks[k]);
+      _chapters = Array.from({ length: count }, (_, i) => ({
+        num: i + 1, title: null,
+        url: urls ? urls[i] : null,
+        status: 'pending', reason: null, _el: null
+      }));
+      if (panelTitle) panelTitle.textContent = novelTitle ? trunc(novelTitle, 30) : 'Chapter Tracker';
+      _filter = 'all';
+      document.querySelectorAll('.chs-filter-tab').forEach(t => t.classList.toggle('active', t.dataset.filter === 'all'));
+      if (_isOpen) applyFilter(); else updateSummary();
+    },
+
+    /** Mark a chapter as successfully extracted (0-based idx) */
+    setOk(idx, title) {
+      const c = _chapters[idx]; if (!c) return;
+      c.status = 'ok'; c.title = title || `Chapter ${idx + 1}`;
+      if (c._el) patchTile(c); else makeTile(c);
+      updateSummary();
+      if (_isOpen && (_filter === 'all' || _filter === 'ok')) {
+        if (!c._el.parentElement) { listEl.appendChild(c._el); }
+      } else if (_isOpen && _filter === 'pending') {
+        c._el.remove();
+      }
+      if (bulkRunning && _isOpen) listEl.scrollTop = listEl.scrollHeight;
+    },
+
+    /** Mark a chapter as failed (0-based idx). onPaste(text) called when user manually supplies text. */
+    setFailed(idx, title, reason, onPaste) {
+      const c = _chapters[idx]; if (!c) return;
+      c.status = 'failed';
+      c.title  = title  || `Chapter ${idx + 1}`;
+      c.reason = reason || 'Unknown error';
+      if (onPaste) _pasteCallbacks[idx] = onPaste;
+      if (c._el) patchTile(c); else makeTile(c);
+      updateSummary();
+      if (_isOpen && (_filter === 'all' || _filter === 'failed')) {
+        if (!c._el.parentElement) listEl.appendChild(c._el);
+      } else if (_isOpen && _filter === 'pending') {
+        c._el.remove();
+      }
+    },
+
+    /** Continuous-mode push (no pre-known index) */
+    pushOk(title) {
+      const c = { num: _chapters.length + 1, title, url: null, status: 'ok', reason: null, _el: null };
+      _chapters.push(c);
+      makeTile(c);
+      updateSummary();
+      if (_isOpen && (_filter === 'all' || _filter === 'ok')) {
+        listEl.appendChild(c._el);
+        listEl.scrollTop = listEl.scrollHeight;
+      }
+      emptyEl.style.display = 'none';
+    },
+    pushFailed(title, reason) {
+      const idx = _chapters.length;
+      const c   = { num: idx + 1, title: title || '(unknown)', url: null, status: 'failed', reason, _el: null };
+      _chapters.push(c);
+      makeTile(c);
+      updateSummary();
+      if (_isOpen && (_filter === 'all' || _filter === 'failed')) {
+        listEl.appendChild(c._el);
+        listEl.scrollTop = listEl.scrollHeight;
+      }
+      emptyEl.style.display = 'none';
+    },
+
+    /** Register (or replace) an onPaste callback for an index without changing status */
+    onPaste(idx, cb) { _pasteCallbacks[idx] = cb; },
+
+    /** Store the URL for a chapter (used so the popup can open it) */
+    setUrl(idx, url) { if (_chapters[idx]) _chapters[idx].url = url; },
+
+    open:  openPanel,
+    count: () => _chapters.length,
+  };
+})();
+
 
 bueSendBtn.addEventListener('click', () => {
   const selected = [...bueSelected].sort((a,b) => a-b).map(i => bueFiltered[i]);
@@ -1410,6 +1780,7 @@ async function runBulkLoop(startUrl) {
     return;
   }
 
+  ChapterStatus.init(0, ''); // continuous — unknown total, push as we go
   let currentUrl = startUrl;
   while (!bulkStopped) {
     try {
@@ -1423,6 +1794,7 @@ async function runBulkLoop(startUrl) {
       );
       const { title, content, error } = extractFromHtml(html, currentUrl);
       if (error && !content) {
+        ChapterStatus.pushFailed(null, error);
         showStatus(statusBulk, `⚠ Parse error on "${trunc(currentUrl,35)}", skipping: ${error}`, 'warn', true);
         const nav = getNextUrlFromHtml(html, currentUrl);
         if (nav.isLast || !nav.nextUrl) { finishBulk('continuous'); break; }
@@ -1430,6 +1802,7 @@ async function runBulkLoop(startUrl) {
       }
       bulkCount++; bulkLastTitle = title;
       if (!bulkFirstTitle) bulkFirstTitle = title;
+      ChapterStatus.pushOk(title);
       const chunk = `\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
       bulkChunks.push({ title, content, raw: chunk }); updateBulkOutput();
       chapterCounter.textContent = bulkCount + ' chapter' + (bulkCount === 1 ? '' : 's');
@@ -1439,6 +1812,7 @@ async function runBulkLoop(startUrl) {
       if (nav.isLast || !nav.nextUrl) { finishBulk('continuous'); break; }
       currentUrl = nav.nextUrl; await sleep(800);
     } catch(err) {
+      ChapterStatus.pushFailed(null, err.message);
       setBulkUI(false); stopBulkTimer();
       showStatus(statusBulk, `✗ Failed after 4 attempts on "${trunc(currentUrl,35)}": ${err.message}`, 'error', true);
       if (bulkCount > 0) {
@@ -1488,11 +1862,38 @@ async function runNovelArrowBulkLoop(startUrl) {
   canvasIndicatorText.textContent = `0 / ${total} chapters`;
   showStatus(statusBulk, `🚀 Scraping ${total} chapter${total===1?'':'s'} via NovelArrow API…`, 'warn', true);
 
+  // Initialise status panel with N pending tiles
+  const _naUrls = chapterList.slice(startIdx).map(ch => ch.url);
+  ChapterStatus.init(total, chapterList[startIdx]?.title || '', _naUrls);
+
+  // ── onPaste callback for NovelArrow: append to bulkChunks + save ──────
+  function makeNAPasteCallback(chIdx, chNum) {
+    return function (pastedText) {
+      const lines   = pastedText.split('\n').map(l => l.trim()).filter(Boolean);
+      const title   = lines[0] && lines[0].length < 120 ? lines[0] : `Chapter ${chNum}`;
+      const content = (lines.length > 1 ? lines.slice(1).join('\n\n') : pastedText).trim();
+      const raw     = `\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
+      // Replace the [MISSING] placeholder if it exists, or append
+      const missingIdx = bulkChunks.findIndex(c => c.title === `Chapter ${chNum} [MISSING]`);
+      if (missingIdx !== -1) bulkChunks[missingIdx] = { title, content, raw };
+      else                   bulkChunks.push({ title, content, raw });
+      bulkCount = bulkChunks.filter(c => !c.content.startsWith('[Chapter')).length;
+      if (!bulkFirstTitle) bulkFirstTitle = title;
+      bulkLastTitle = bulkChunks[bulkChunks.length - 1]?.title || title;
+      updateBulkOutput();
+      ChapterStatus.setOk(chIdx, title);
+      autoSaveHistory({ type: 'bulk', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle,
+        chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
+      showStatus(statusBulk, `✓ Chapter ${chNum} patched via manual paste!`, 'success');
+    };
+  }
+
   // 3. Fetch each chapter sequentially
   for (let i = startIdx; i < chapterList.length; i++) {
     if (bulkStopped) break;
-    const ch = chapterList[i];
+    const ch    = chapterList[i];
     const chNum = i - startIdx + 1;
+    const chIdx = chNum - 1; // 0-based index into ChapterStatus
 
     progressCurrent.textContent = `Ch ${chNum}/${total}: ${trunc(ch.url, 50)}`;
     progressBarFill.style.width = Math.round((chNum / total) * 100) + '%';
@@ -1508,12 +1909,14 @@ async function runNovelArrowBulkLoop(startUrl) {
 
       if (error && !content) {
         // Show what's actually failing so we can diagnose the API shape issue
+        ChapterStatus.setFailed(chIdx, ch.title, error, makeNAPasteCallback(chIdx, chNum));
         showStatus(statusBulk, `⚠ Ch ${chNum} skipped — ${error}`, 'warn', true);
         bulkChapterTitle.textContent = `⚠ Ch ${chNum}: ${trunc(error, 60)}`;
         console.warn(`[NA bulk] ch ${chNum} skipped:`, error, ch.url);
         continue;
       }
 
+      ChapterStatus.setOk(chIdx, title);
       bulkCount++; bulkLastTitle = title;
       if (!bulkFirstTitle) bulkFirstTitle = title;
       const raw = `\n\n${'─'.repeat(60)}\n${title}\n${'─'.repeat(60)}\n\n${content}`;
@@ -1525,6 +1928,7 @@ async function runNovelArrowBulkLoop(startUrl) {
       await sleep(700);
 
     } catch(err) {
+      ChapterStatus.setFailed(chIdx, ch.title, err.message, makeNAPasteCallback(chIdx, chNum));
       showStatus(statusBulk, `✗ Failed ch ${chNum} after 4 attempts: ${err.message}`, 'error', true);
       // Insert placeholder and continue rather than aborting the whole run
       const placeholder = `[Chapter ${chNum} could not be fetched — open manually: ${ch.url}]`;
@@ -1552,6 +1956,38 @@ async function runCustomUrlLoop(urls) {
   const results    = new Array(total).fill(null);
   const failedIdxs = []; // indices that exhausted all retries in main pass
 
+  // Initialise status panel — all chapters start as pending
+  ChapterStatus.init(total, '', urls);
+
+  // ── onPaste callback factory ──────────────────────────────────────────
+  // When the user manually pastes text for chapter i via the status panel,
+  // patch results[i] and rebuild the bulk output.
+  function makePasteCallback(i) {
+    return function (pastedText) {
+      const lines   = pastedText.split('\n').map(l => l.trim()).filter(Boolean);
+      const title   = lines[0] && lines[0].length < 120 ? lines[0] : `Chapter ${i+1}`;
+      const content = (lines.length > 1 ? lines.slice(1).join('\n\n') : pastedText).trim();
+      results[i] = { title, content, url: urls[i], patched: true };
+      ChapterStatus.setOk(i, title);
+
+      // Rebuild bulkChunks in full index order so chapter position is preserved
+      bulkChunks = [];
+      bulkCount  = 0; bulkFirstTitle = ''; bulkLastTitle = '';
+      for (let idx = 0; idx < urls.length; idx++) {
+        const r = results[idx];
+        if (!r || r.skipped) continue;
+        const raw = `\n\n${'─'.repeat(60)}\n${r.title}\n${'─'.repeat(60)}\n\n${r.content}`;
+        bulkChunks.push({ title: r.title, content: r.content, raw });
+        bulkCount++; bulkLastTitle = r.title;
+        if (!bulkFirstTitle) bulkFirstTitle = r.title;
+      }
+      updateBulkOutput();
+      autoSaveHistory({ type: 'custom', firstChapter: bulkFirstTitle, lastChapter: bulkLastTitle,
+        chaptersCount: bulkCount, text: bulkText, novelUrl: novelBaseUrl(bulkStartUrl) });
+      showStatus(statusBulk, `✓ Chapter ${i+1} patched via manual paste!`, 'success');
+    };
+  }
+
   // ── fetch + extract one URL, store at results[i] ──────────────────────
   async function fetchOne(i, isRetry = false) {
     if (bulkStopped) return;
@@ -1571,8 +2007,9 @@ async function runCustomUrlLoop(urls) {
             }
           }
         );
-        if (error && !content) { results[i] = { skipped: true, url, reason: error }; if (!isRetry) failedIdxs.push(i); return; }
+        if (error && !content) { results[i] = { skipped: true, url, reason: error }; if (!isRetry) failedIdxs.push(i); ChapterStatus.setFailed(i, null, error, makePasteCallback(i)); return; }
         results[i] = { title, content, url };
+        ChapterStatus.setOk(i, title);
       } catch(err) {
         results[i] = { skipped: true, url, reason: err.message };
         if (!isRetry) failedIdxs.push(i);
@@ -1596,15 +2033,18 @@ async function runCustomUrlLoop(urls) {
     } catch(err) {
       results[i] = { skipped: true, url, reason: err.message };
       if (!isRetry) failedIdxs.push(i);
+      ChapterStatus.setFailed(i, null, err.message, makePasteCallback(i));
       return;
     }
     const { title, content, error } = extractFromHtml(html, url);
     if (error && !content) {
       results[i] = { skipped: true, url, reason: error };
       if (!isRetry) failedIdxs.push(i);
+      ChapterStatus.setFailed(i, null, error, makePasteCallback(i));
       return;
     }
     results[i] = { title, content, url };
+    ChapterStatus.setOk(i, title);
   }
 
   // ── helper: commit a batch of indices to bulkChunks in order ──────────
@@ -1656,13 +2096,18 @@ async function runCustomUrlLoop(urls) {
         `Retry pass: ch ${batchSlice.map(i=>i+1).join(', ')} of ${total}…`;
       await Promise.all(batchSlice.map(i => { results[i] = null; return fetchOne(i, true); }));
       const recovered = batchSlice.filter(i => results[i] && !results[i].skipped);
-      if (recovered.length) commitBatch(recovered);
+      if (recovered.length) {
+        recovered.forEach(i => ChapterStatus.setOk(i, results[i].title));
+        commitBatch(recovered);
+      }
       if (ri + RETRY_BATCH < failedIdxs.length && !bulkStopped) await sleep(1500);
     }
 
     // Insert placeholders for chapters that still failed after retry
     const stillFailed = failedIdxs.filter(i => !results[i] || results[i].skipped);
     for (const i of stillFailed) {
+      const reason = results[i]?.reason || 'All proxies failed';
+      ChapterStatus.setFailed(i, null, reason, makePasteCallback(i));
       const placeholder = `[Chapter ${i+1} could not be fetched — open manually: ${urls[i]}]`;
       results[i] = { title: `Chapter ${i+1} [MISSING]`, content: placeholder, url: urls[i], missing: true };
       commitBatch([i]);
