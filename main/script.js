@@ -1799,8 +1799,7 @@ function showBulkPasteTray(failedIdxList, allUrls, resultsRef) {
     }
     updateBulkOutput();
 
-    const stillMissing = allUrls.length - bulkCount +
-      bulkChunks.filter(c => c.content.startsWith('[Chapter')).length;
+    const stillMissing = bulkChunks.filter(c => c.content.includes('could not be fetched — open manually')).length;
     tray.querySelector('#bulkPasteTrayStatus').textContent =
       `✓ ${patched} chapter${patched===1?'':'s'} applied!` +
       (stillMissing > 0 ? ` (${stillMissing} still missing)` : ' — all filled!');
@@ -1890,7 +1889,7 @@ bookmarksList.addEventListener('click', e => { const btn = e.target.closest('.hc
 histClearAll.addEventListener('click', () => {
   if (activeHistSub === 'extracts') { if (!confirm('Clear all extract history?')) return; const hist = storageGet(HISTORY_KEY, []); hist.forEach(e => { try { localStorage.removeItem('nb_text_'+e.id); } catch {} }); storageSet(HISTORY_KEY, []); renderExtracts(); }
   else if (activeHistSub === 'bookmarks') { if (!confirm('Clear all bookmark logs?')) return; storageSet(BOOKMARK_LOG, []); renderBookmarkLog(); }
-  else if (activeHistSub === 'log') { if (!confirm('Clear session log?')) return; try { sessionStorage.removeItem(SESSION_LOG_KEY); } catch {} renderSessionLog(); return; }
+  else if (activeHistSub === 'log') { if (!confirm('Clear session log?')) return; try { sessionStorage.removeItem(SESSION_LOG_KEY); } catch {} renderSessionLog(); showStatus(statusHistory, '✓ Session log cleared.', 'warn'); return; }
   showStatus(statusHistory, '✓ Cleared.', 'warn');
 });
 function renderHistory() {
@@ -1947,7 +1946,7 @@ function buildPreview() {
   if (printData.chunks && printData.chunks.length > 0) {
     let html = '';
     printData.chunks.forEach((ch, i) => {
-      if (titles) html += `<div style="font-weight:bold;font-size:${(fontSize+1.5).toFixed(1)}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;">${esc(ch.title)}</div>`;
+      if (titles) html += `<div style="font-weight:700;font-size:${(fontSize*1.4).toFixed(1)}pt;border-bottom:2px solid #333;padding-bottom:6pt;margin-bottom:10pt;margin-top:2pt;letter-spacing:.5px;">${esc(ch.title)}</div>`;
       html += splitParas(ch.content).map(p => {
         if (p.includes('─────')) return dividers ? `<hr style="border:none;border-top:1px dashed #ccc;margin:8pt 0;"/>` : '';
         return `<div style="margin-bottom:5pt;text-align:justify;">${esc(p)}</div>`;
@@ -1957,6 +1956,9 @@ function buildPreview() {
     printPreview.innerHTML = html;
   } else {
     let html = '';
+    if (titles && printData.title) {
+      html += `<div style="font-weight:700;font-size:${(fontSize*1.4).toFixed(1)}pt;border-bottom:2px solid #333;padding-bottom:6pt;margin-bottom:10pt;margin-top:2pt;letter-spacing:.5px;">${esc(printData.title)}</div>`;
+    }
     splitParas(printData.text).forEach(line => {
       const isSep = line.includes('─────');
       if (isSep && dividers) { html += `<hr style="border:none;border-top:1px dashed #ccc;margin:8pt 0;"/>`; return; }
@@ -1998,7 +2000,7 @@ function buildPrintHTML(fontSize, lineHeight, fontFamily, twoCol, titles, divide
   *{box-sizing:border-box;margin:0;padding:0;}
   html,body{background:#fff;color:#000;font-family:${fontFamily};font-size:${fontSize}pt;line-height:${lineHeight};}
   .pc{margin-bottom:0;}
-  .pc-title{font-weight:bold;font-size:${fontSize + 1.5}pt;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:8pt;margin-top:4pt;}
+  .pc-title{font-weight:700;font-size:${(fontSize*1.4).toFixed(1)}pt;border-bottom:2px solid #333;padding-bottom:6pt;margin-bottom:10pt;margin-top:4pt;letter-spacing:.5px;}
   .pp{margin-bottom:5pt;text-align:justify;}
   hr{border:none;border-top:1px dashed #ccc;margin:8pt 0;}
   ${colCSS}
@@ -2433,9 +2435,19 @@ try { if (isAllowedUrl(window.location.href)) urlInput.value = window.location.h
   upSaveProfileBtn.addEventListener('click', async () => {
     if (!currentUser || currentRole === 'guest') return;
     const displayName = upSettingName.value.trim();
-    const username    = upSettingUsername.value.trim().replace(/^@/,'');
+    const username    = upSettingUsername.value.trim().replace(/^@/,'').toLowerCase();
     try {
       upSaveProfileBtn.disabled = true;
+      // Check username uniqueness if it changed
+      if (username && username !== (currentUserData.username || '').toLowerCase()) {
+        const uq = F.query(F.collection(db,'users'), F.where('username','==',username));
+        const usnap = await F.getDocs(uq);
+        if (!usnap.empty) {
+          showMsg(upSettingsMsg, '✗ That username is already taken.', 'error');
+          upSaveProfileBtn.disabled = false;
+          return;
+        }
+      }
       await F.updateDoc(F.doc(db,'users',currentUser.uid), { displayName, username, updatedAt: F.serverTimestamp() });
       currentUserData.displayName = displayName;
       currentUserData.username    = username;
@@ -3135,46 +3147,41 @@ try { if (isAllowedUrl(window.location.href)) urlInput.value = window.location.h
   function hideRegErr()    { if (registerError) registerError.style.display = 'none'; }
 
   if (showRegisterBtn) showRegisterBtn.addEventListener('click', () => {
-    const loginFields = document.getElementById('loginFields');
-    if (loginFields) loginFields.style.display = 'none';
     if (registerForm) registerForm.style.display = 'block';
+    const row = document.getElementById('noAccountRow');
+    if (row) row.style.display = 'none';
     hideLoginError();
   });
   if (hideRegisterBtn) hideRegisterBtn.addEventListener('click', () => {
     if (registerForm) registerForm.style.display = 'none';
-    const loginFields = document.getElementById('loginFields');
-    if (loginFields) loginFields.style.display = '';
+    const row = document.getElementById('noAccountRow');
+    if (row) row.style.display = '';
     hideRegErr();
   });
 
   if (registerBtn) {
     registerBtn.addEventListener('click', async () => {
-      const username = registerName   ? registerName.value.trim().replace(/^@/, '')  : '';
-      const email    = registerEmail2 ? registerEmail2.value.trim() : '';
-      const pass     = registerPass2  ? registerPass2.value         : '';
+      const name  = registerName  ? registerName.value.trim()   : '';
+      const email = registerEmail2 ? registerEmail2.value.trim() : '';
+      const pass  = registerPass2  ? registerPass2.value         : '';
       hideRegErr();
-      if (!username)      { showRegErr('Username is required.'); return; }
-      if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) { showRegErr('Username: 3–20 chars, letters/numbers/underscores only.'); return; }
       if (!email)         { showRegErr('Email is required.'); return; }
       if (pass.length < 8){ showRegErr('Password must be at least 8 characters.'); return; }
       registerBtn.disabled = true;
       if (registerSpinner) registerSpinner.style.display = 'block';
       try {
-        // Check username not already taken
-        const uq = F.query(F.collection(db,'users'), F.where('username','==', username.toLowerCase()));
-        const usnap = await F.getDocs(uq);
-        if (!usnap.empty) { showRegErr('That username is already taken.'); registerBtn.disabled = false; if (registerSpinner) registerSpinner.style.display = 'none'; return; }
-
+        // Check user count BEFORE creating the account so first-user → admin works correctly
+        const allSnap = await F.getDocs(F.collection(db,'users'));
+        const role    = allSnap.empty ? 'admin' : 'normal';
         const { createUserWithEmailAndPassword: _cuw } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
         const cred   = await _cuw(auth, email, pass);
         const newUid = cred.user.uid;
-        const allSnap = await F.getDocs(F.collection(db,'users'));
-        const role    = allSnap.empty ? 'admin' : 'normal';
         await F.setDoc(F.doc(db,'users',newUid), {
-          displayName: username, username: username.toLowerCase(), email,
+          displayName: name, username: '', email,
           role, status: 'active', createdAt: F.serverTimestamp()
         });
-        // onAuthStateChanged takes over
+        // onAuthStateChanged takes over — hide spinner now
+        if (registerSpinner) registerSpinner.style.display = 'none';
       } catch(e) {
         const msgs = {
           'auth/email-already-in-use': 'That email is already registered.',
