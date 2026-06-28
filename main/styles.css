@@ -327,8 +327,8 @@ textarea.url-list-input::placeholder { color: var(--muted); font-style: italic; 
 
 /* PRINT PANEL */
 #panelPrint { gap: 14px; }
-.print-preview-wrap { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-shrink: 0; background: var(--surface2); padding: 10px; min-height: 220px; max-height: 300px; overflow-y: auto; }
-#printPreview { padding: 20px 24px; font-size: var(--prev-size, 11pt); line-height: var(--prev-lh, 1.6); color: #111; background: #fff; font-family: var(--prev-font, Georgia, serif); word-break: break-word; border-radius: 4px; box-shadow: 0 2px 12px rgba(0,0,0,.5); }
+.print-preview-wrap { border: 1px solid var(--border); border-radius: 8px; flex-shrink: 0; background: var(--surface3); padding: 10px; min-height: 220px; max-height: 300px; overflow-y: auto; }
+#printPreview { padding: 20px 24px; font-size: var(--prev-size, 11pt); line-height: var(--prev-lh, 1.6); color: #111; background: #fff; font-family: var(--prev-font, Georgia, serif); word-break: break-word; border-radius: 5px; }
 #printPreview.two-col { column-count: 2; column-gap: 24px; }
 .print-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .print-control-group { display: flex; flex-direction: column; gap: 5px; }
